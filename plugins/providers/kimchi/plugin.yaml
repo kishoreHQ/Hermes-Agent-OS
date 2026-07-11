@@ -1,0 +1,30 @@
+apiVersion: hermes.plugin/v1
+kind: provider
+metadata:
+  id: provider.kimchi
+  version: 0.1.0
+  name: Kimchi Inference
+spec:
+  # OpenAI-compatible Chat Completions (same base URL as Cursor / OpenCode docs).
+  # https://docs.kimchi.dev/docs/cursor
+  # https://docs.kimchi.dev/docs/inference-quickstart
+  baseURL: https://llm.kimchi.dev/openai/v1
+  local: false
+  costTier: budget
+  capabilities:
+    - coding
+    - tools
+  models:
+    - id: kimi-k2.6
+      capabilities: [coding, tools]
+      costTier: budget
+    - id: minimax-m3
+      capabilities: [coding, tools]
+      costTier: budget
+    - id: nemotron-3-ultra-fp4
+      capabilities: [coding, tools]
+      costTier: budget
+labels:
+  hermes.driver: openai-compat
+  hermes.vendor: kimchi
+  hermes.docs: https://docs.kimchi.dev/docs/cursor

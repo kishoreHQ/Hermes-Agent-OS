@@ -63,4 +63,14 @@ func TestTemplatesPopular(t *testing.T) {
 	if _, ok := TemplateByID("openrouter"); !ok {
 		t.Fatal("openrouter")
 	}
+	k, ok := TemplateByID("kimchi")
+	if !ok {
+		t.Fatal("kimchi template")
+	}
+	if k.BaseURL != "https://llm.kimchi.dev/openai/v1" {
+		t.Fatalf("kimchi baseURL %q", k.BaseURL)
+	}
+	if k.DefaultModel != "kimi-k2.6" {
+		t.Fatalf("kimchi model %q", k.DefaultModel)
+	}
 }

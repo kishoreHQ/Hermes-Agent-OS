@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/echo"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/openaicompat"
@@ -34,6 +35,7 @@ func DefaultFactories() *plugin.FactoryRegistry {
 	f.Register("provider.example.budget", echo.ProviderFactory)
 	f.Register("runtime.example.steps", steps.RuntimeFactory)
 	f.Register("provider.openai.compat", openaicompat.ProviderFactory)
+	f.Register("provider.kimchi", openaicompat.ProviderFactory)
 	f.Register("memory.example.ephemeral", memoryFactory)
 	return f
 }
@@ -82,9 +84,13 @@ func New(opts Options) (*Result, error) {
 	}
 
 	creds := credentials.NewMemoryBroker()
-	// Optional live provider key from environment (never logged)
+	// Optional live provider keys from environment (never logged)
 	if key := os.Getenv("HERMES_OPENAI_API_KEY"); key != "" {
 		_, _ = creds.Put(context.Background(), "provider.openai.compat", "env", "provider.openai.compat", key)
+	}
+	// Kimchi Inference — https://docs.kimchi.dev/docs/cursor · key from app.kimchi.dev/settings
+	if key := firstEnv("KIMCHI_API_KEY", "HERMES_KIMCHI_API_KEY"); key != "" {
+		_, _ = creds.Put(context.Background(), "provider.kimchi", "env", "provider.kimchi", key)
 	}
 
 	k := kernel.NewWithOptions(kernel.Options{
@@ -119,12 +125,65 @@ func New(opts Options) (*Result, error) {
 		}
 	}
 
+	// Ensure Kimchi provider is registered (disk plugin or env-forced) with correct base URL.
+	// https://llm.kimchi.dev/openai/v1 — same endpoint Cursor/OpenCode use.
+	ensureKimchiProvider(reg, factories, k)
+
 	return &Result{
 		Kernel:       k,
 		Registry:     reg,
 		Loaded:       loaded,
 		LoadWarnings: warn,
 	}, nil
+}
+
+// ensureKimchiProvider registers provider.kimchi when an API key is present, or
+// refreshes base URL/models if the disk plugin (plugins/providers/kimchi) already loaded.
+func ensureKimchiProvider(reg plugin.Registry, factories *plugin.FactoryRegistry, k *kernel.Kernel) {
+	base := envOr("HERMES_KIMCHI_BASE_URL", "https://llm.kimchi.dev/openai/v1")
+	model := envOr("HERMES_KIMCHI_MODEL", "kimi-k2.6")
+	_, _, exists := reg.Get("provider.kimchi")
+	keyPresent := firstEnv("KIMCHI_API_KEY", "HERMES_KIMCHI_API_KEY") != ""
+	// Only force-register from env when key is set; disk plugin may already exist.
+	if !exists && !keyPresent {
+		return
+	}
+	if exists && !keyPresent {
+		// Disk plugin already registered — leave as-is (no re-register churn).
+		return
+	}
+	m := plugin.Manifest{
+		APIVersion: "hermes.plugin/v1",
+		Kind:       plugin.KindProvider,
+		Metadata:   plugin.Metadata{ID: "provider.kimchi", Version: "0.1.0", Name: "Kimchi Inference"},
+		Spec: map[string]any{
+			"baseURL": base, "local": false, "costTier": "budget",
+			"capabilities": []any{"coding", "tools"},
+			"models": []any{
+				map[string]any{"id": model, "capabilities": []any{"coding", "tools"}, "costTier": "budget"},
+				map[string]any{"id": "minimax-m3", "capabilities": []any{"coding", "tools"}, "costTier": "budget"},
+				map[string]any{"id": "nemotron-3-ultra-fp4", "capabilities": []any{"coding", "tools"}, "costTier": "budget"},
+			},
+		},
+		Labels: map[string]string{
+			"hermes.driver": "openai-compat",
+			"hermes.vendor": "kimchi",
+			"hermes.docs":   "https://docs.kimchi.dev/docs/cursor",
+		},
+	}
+	if inst, err := factories.Create(m); err == nil {
+		_ = reg.Register(m, inst)
+		k.RefreshAdapters()
+	}
+}
+
+func firstEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := strings.TrimSpace(os.Getenv(k)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func envOr(k, def string) string {

@@ -25,6 +25,17 @@ type Template struct {
 func Templates() []Template {
 	return []Template{
 		{
+			// Kimchi Inference (Cast AI) — same OpenAI-compat endpoint as Cursor/OpenCode docs.
+			// Docs: https://docs.kimchi.dev/docs/cursor · https://docs.kimchi.dev/docs/inference-quickstart
+			// Base URL: https://llm.kimchi.dev/openai/v1 · Key: app.kimchi.dev/settings
+			ID: "kimchi", Name: "Kimchi", Driver: "openai-compat",
+			Description: "Kimchi Inference — open-source models (Kimi K2.6, MiniMax M3) via OpenAI-compatible API",
+			BaseURL: "https://llm.kimchi.dev/openai/v1", Local: false, CostTier: types.TierBudget,
+			DefaultModel: "kimi-k2.6", NeedsAPIKey: true, Category: "cloud",
+			DocsURL: "https://docs.kimchi.dev/docs/cursor",
+			SuggestedModels: []string{"kimi-k2.6", "minimax-m3", "nemotron-3-ultra-fp4"},
+		},
+		{
 			ID: "openai", Name: "OpenAI", Driver: "openai-compat",
 			Description: "OpenAI official API (Chat Completions)",
 			BaseURL: "https://api.openai.com/v1", Local: false, CostTier: types.TierStandard,

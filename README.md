@@ -114,6 +114,7 @@ scripts/             # Dev helpers
 | **H1.1** AESP hermes-core claim | Done (`make conform`) |
 | **H3.1** Command Deck | Done |
 | **Provider** OpenAI-compatible | Done (`provider.openai.compat`) |
+| **Provider** Kimchi Inference | Done (`provider.kimchi`) — see `docs/KIMCHI.md` |
 | **Catalog gaps** (impact order) | Done — `make conform-full` green |
 | **Multi-provider failover + model discovery** | Done — see `docs/MULTI_PROVIDER.md` |
 

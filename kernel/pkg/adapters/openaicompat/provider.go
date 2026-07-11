@@ -29,13 +29,20 @@ type Provider struct {
 	apiKey   string // optional static (dev); prefer CredentialHandle + Resolve
 	client   *http.Client
 	Resolve  SecretResolver
+
+	// health cache avoids stalling routing on every mission when remote is slow/unreachable
+	healthOK   bool
+	healthErr  error
+	healthAt   time.Time
+	healthTTL  time.Duration
 }
 
 func NewProvider(m plugin.Manifest) (*Provider, error) {
 	p := &Provider{
-		manifest: m,
-		client:   &http.Client{Timeout: 120 * time.Second},
-		baseURL:  "http://127.0.0.1:11434/v1",
+		manifest:  m,
+		client:    &http.Client{Timeout: 120 * time.Second},
+		baseURL:   "http://127.0.0.1:11434/v1",
+		healthTTL: 30 * time.Second,
 	}
 	spec := m.Spec
 	if spec == nil {
@@ -58,32 +65,52 @@ func ProviderFactory(m plugin.Manifest) (any, error) {
 func (p *Provider) ID() types.PluginID { return p.manifest.Metadata.ID }
 
 func (p *Provider) Health(ctx context.Context) error {
-	// Lightweight: GET models if available; ignore failures for offline-first demos
+	// Cached + short-timeout probe so remote gateways (Kimchi, etc.) don't stall routing.
+	if p.healthTTL > 0 && !p.healthAt.IsZero() && time.Since(p.healthAt) < p.healthTTL {
+		if p.healthOK {
+			return nil
+		}
+		return p.healthErr
+	}
 	url := p.modelsURL()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	hctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(hctx, http.MethodGet, url, nil)
 	if err != nil {
+		p.cacheHealth(false, err)
 		return err
 	}
 	p.auth(req, "")
 	resp, err := p.client.Do(req)
 	if err != nil {
 		// Unreachable is unhealthy for remote; still allow Complete to fail clearly
-		return fmt.Errorf("unreachable: %w", err)
+		err = fmt.Errorf("unreachable: %w", err)
+		p.cacheHealth(false, err)
+		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 500 {
-		return fmt.Errorf("http %d", resp.StatusCode)
+	// 2xx/3xx = up; 401/403 still mean the endpoint is reachable (key may be missing).
+	// 404/5xx = unhealthy for routing.
+	if resp.StatusCode >= 500 || resp.StatusCode == 404 {
+		err = fmt.Errorf("http %d", resp.StatusCode)
+		p.cacheHealth(false, err)
+		return err
 	}
+	p.cacheHealth(true, nil)
 	return nil
+}
+
+func (p *Provider) cacheHealth(ok bool, err error) {
+	p.healthOK = ok
+	p.healthErr = err
+	p.healthAt = time.Now()
 }
 
 func (p *Provider) Describe(ctx context.Context) (provider.Descriptor, error) {
 	d := p.desc
 	d.BaseURL = p.baseURL
-	// Best-effort refresh models into descriptor for routing
-	if models, err := p.ListModels(ctx); err == nil && len(models) > 0 {
-		d.Models = models
-	}
+	// Use manifest models for routing — never network-probe here.
+	// Live discovery is GET ListModels / Host /providers/models (operator path).
 	return d, nil
 }
 

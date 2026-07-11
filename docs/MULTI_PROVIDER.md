@@ -93,7 +93,7 @@ Popular templates (OpenAI-compatible base URLs):
 
 | Category | Templates |
 |----------|-----------|
-| Cloud | OpenAI, Groq, Together, Fireworks, DeepSeek, Mistral, xAI, Gemini, Azure OpenAI, Perplexity, Cerebras, SambaNova, Hugging Face, Cloudflare Workers AI, NVIDIA NIM, Moonshot, Qwen |
+| Cloud | **Kimchi**, OpenAI, Groq, Together, Fireworks, DeepSeek, Mistral, xAI, Gemini, Azure OpenAI, Perplexity, Cerebras, SambaNova, Hugging Face, Cloudflare Workers AI, NVIDIA NIM, Moonshot, Qwen |
 | Gateway | OpenRouter, Anthropic-via-OpenRouter, LiteLLM |
 | Local | Ollama, LM Studio, vLLM, LocalAI, Echo (test) |
 | Custom | Any Chat Completions endpoint |
@@ -101,6 +101,18 @@ Popular templates (OpenAI-compatible base URLs):
 Native Anthropic Messages / Google GenAI plugins are future work — use OpenRouter or OpenAI-compat endpoints today.
 
 ## Live multi-provider setup
+
+### Kimchi (recommended first live provider)
+
+See **[KIMCHI.md](./KIMCHI.md)** for full steps (Cursor-compatible base URL).
+
+```bash
+export KIMCHI_API_KEY='…'   # from https://app.kimchi.dev/settings
+make serve
+# provider.kimchi → https://llm.kimchi.dev/openai/v1 · models kimi-k2.6, minimax-m3, …
+```
+
+### Generic OpenAI-compat
 
 ```bash
 export HERMES_OPENAI_BASE_URL='https://api.example.com/v1'

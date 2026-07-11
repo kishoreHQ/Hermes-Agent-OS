@@ -74,7 +74,7 @@ export function ProvidersPage() {
   })
 
   const [category, setCategory] = useState('all')
-  const [templateId, setTemplateId] = useState('openai')
+  const [templateId, setTemplateId] = useState('kimchi')
   const [name, setName] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [defaultModel, setDefaultModel] = useState('')
