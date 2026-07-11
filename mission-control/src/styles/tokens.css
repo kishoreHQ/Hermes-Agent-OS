@@ -1,0 +1,56 @@
+/* Hermes Mission Control — Cherenkov ops palette */
+
+:root,
+.dark {
+  --bg-0: #040b12;
+  --bg-1: #0c1520;
+  --bg-2: #121f2d;
+  --bg-3: #1c2d40;
+  --bg-4: #263d54;
+
+  --ink-0: #e8f4ff;
+  --ink-1: #8aa4bd;
+  --ink-2: #5a738c;
+
+  --line: rgba(0, 191, 255, 0.1);
+  --line-strong: rgba(0, 191, 255, 0.22);
+
+  --cyan-100: #33ddff;
+  --cyan-200: #00bfff;
+  --accent: #00bfff;
+  --accent-dim: rgba(0, 191, 255, 0.12);
+  --accent-glow: rgba(0, 191, 255, 0.28);
+
+  --ok: #a3ff12;
+  --ok-dim: rgba(163, 255, 18, 0.1);
+  --warn: #ff9f1c;
+  --warn-dim: rgba(255, 159, 28, 0.14);
+  --fail: #f87171;
+  --fail-dim: rgba(248, 113, 113, 0.12);
+  --live: #00bfff;
+
+  --rgb-cyan: 0, 191, 255;
+
+  --font-display: "Archivo", system-ui, sans-serif;
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --motion: 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --surface-grid:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(0, 191, 255, 0.08), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 100% 0%, rgba(139, 92, 255, 0.06), transparent 45%),
+    linear-gradient(180deg, #040b12 0%, #071018 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

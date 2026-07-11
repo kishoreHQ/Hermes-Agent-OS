@@ -16,7 +16,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
-const Version = "hermesd-host/0.2.0"
+const Version = "hermesd-host/0.3.0"
 
 // Server is the Host HTTP surface.
 type Server struct {
@@ -39,6 +39,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/plugins", s.apiPlugins)
 	mux.HandleFunc("/api/v1/memory/search", s.apiMemorySearch)
 	mux.HandleFunc("/api/v1/credentials", s.apiCredentials)
+
+	// Mission Control SPA when mission-control/dist exists (H3 / GAP-UI-002 parity)
+	if dist := uiDistPath(); dist != "" {
+		mux.Handle("/", spaFileServer(dist))
+	}
+
 	return withCORS(mux)
 }
 

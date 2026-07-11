@@ -58,7 +58,7 @@ func runStatus() {
 		os.Exit(1)
 	}
 	printBanner()
-	fmt.Println("status: H2 plugin runtime")
+	fmt.Println("status: H3 Mission Control host")
 	fmt.Println("plugins registered:", len(res.Registry.List("")))
 	fmt.Println("loaded from disk/seed:", res.Loaded)
 	if res.LoadWarnings != "" {
@@ -83,7 +83,7 @@ func runServe(addr string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	printBanner()
-	fmt.Printf("serving Host API on %s (H2)\n", addr)
+	fmt.Printf("serving Host API on %s (H3)\n", addr)
 	fmt.Printf("  plugins: %d (disk/seed loaded=%d)\n", len(k.Plugins().List("")), res.Loaded)
 	if res.LoadWarnings != "" {
 		fmt.Printf("  load notes: %s\n", res.LoadWarnings)

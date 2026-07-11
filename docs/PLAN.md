@@ -54,9 +54,11 @@
 
 ### Phase H3 — Mission Control product home
 
-- Move or re-home Mission Control under `mission-control/`  
-- Bind exclusively to Hermes Host API  
-- Preserve Cherenkov / Command Deck UX contracts from UI-SPEC  
+- [x] Re-home Mission Control under `mission-control/` (Vite/React/Tailwind)  
+- [x] Bind exclusively to Hermes Host API (no vendor SDKs, no kernel imports)  
+- [x] Cherenkov ops aesthetic (overview, missions, fleet, memory, events, credentials)  
+- [x] Vite proxy + `hermesd` SPA serve (`mission-control/dist`)  
+- [ ] Port full Command Deck (connections/board/routines) when Host API grows (H3.1)  
 
 ### Phase H4 — Interchangeability proof
 

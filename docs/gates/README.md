@@ -7,7 +7,7 @@ Product acceptance gates for Hermes-Agent-OS.
 | H0 | Foundation docs + kernel skeleton | **PASS** |
 | H1 | Host API parity smoke (`make smoke`) | **PASS** (core Host surface) |
 | H2 | Plugin load + execute path (`make smoke`) | **PASS** |
-| H3 | Mission Control against Hermes kernel | Pending |
+| H3 | Mission Control against Hermes Host API | **PASS** (core host surfaces) |
 | H4 | Interchangeability proof (≥2 providers, ≥2 runtimes) | Pending |
 | H5 | Security + production readiness | Pending |
 
@@ -26,5 +26,13 @@ Product acceptance gates for Hermes-Agent-OS.
 3. `GET /api/v1/memory/search` returns episodic entry for the mission  
 4. `GET /api/v1/credentials` returns handles **without** secrets  
 5. Registry lists ≥2 providers (echo + budget) and ≥1 runtime  
+
+**H3 demo checklist**
+
+1. `make ui-build && make serve` → browser loads Mission Control from `:8080`  
+2. Or `make serve` + `make ui-dev` → UI on `:5173` via `/api` proxy  
+3. Launch mission from UI → state succeeded, provider/runtime visible  
+4. Fleet shows plugins; Memory / Events / Credentials pages populate  
+5. UI source contains **zero** vendor SDK imports  
 
 AESP-RI GATE-1…9 remain authoritative for the reference monorepo until Hermes owns those demos.

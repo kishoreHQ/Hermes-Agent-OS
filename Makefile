@@ -1,12 +1,13 @@
-.PHONY: test build run serve status clean fmt vet lint help smoke
+.PHONY: test build run serve status clean fmt vet lint help smoke ui-install ui-build ui-dev ui-typecheck dev
 
 KERNEL_DIR := kernel
+UI_DIR := mission-control
 BIN_DIR := bin
 HERMESD := $(BIN_DIR)/hermesd
 ADDR ?= :8080
 
 help: ## Show targets
-	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
 
 test: ## Run kernel unit tests
 	cd $(KERNEL_DIR) && go test ./...
@@ -18,10 +19,28 @@ build: ## Build hermesd
 status: build ## Print hermesd status
 	./$(HERMESD) status
 
-serve: build ## Serve Host API (ADDR=:8080)
+serve: build ## Serve Host API (+ SPA if mission-control/dist exists)
 	./$(HERMESD) serve $(ADDR)
 
 run: serve ## Alias for serve
+
+ui-install: ## npm install Mission Control deps
+	cd $(UI_DIR) && npm install
+
+ui-build: ## Build Mission Control into mission-control/dist
+	cd $(UI_DIR) && npm run build
+
+ui-dev: ## Vite dev server (proxies /api → :8080)
+	cd $(UI_DIR) && npm run dev -- --host 127.0.0.1 --port 5173
+
+ui-typecheck: ## Typecheck Mission Control
+	cd $(UI_DIR) && npm run typecheck
+
+dev: ## Print dual-terminal dev instructions
+	@echo "Terminal 1: make serve"
+	@echo "Terminal 2: make ui-dev"
+	@echo "Open http://127.0.0.1:5173  (API via proxy → :8080)"
+	@echo "Or: make ui-build && make serve  → http://127.0.0.1:8080"
 
 smoke: build ## HTTP smoke against a temporary server
 	@./$(HERMESD) serve 127.0.0.1:18080 & pid=$$!; \
@@ -44,6 +63,6 @@ vet: ## go vet
 	cd $(KERNEL_DIR) && go vet ./...
 
 clean: ## Remove build artifacts
-	rm -rf $(BIN_DIR)
+	rm -rf $(BIN_DIR) $(UI_DIR)/dist
 
 lint: vet test ## Vet + test

@@ -47,12 +47,16 @@ make test
 # Build hermesd
 make build
 
-# Status
-./bin/hermesd status
-
 # Serve Host API (default :8080)
 make serve
-# or: ./bin/hermesd serve :8080
+
+# Mission Control (dev — two terminals)
+make serve          # :8080
+make ui-dev         # :5173, proxies /api → kernel
+
+# Mission Control (prod SPA via hermesd)
+make ui-install && make ui-build
+make serve          # open http://127.0.0.1:8080
 
 # Smoke
 make smoke
@@ -66,7 +70,7 @@ curl -s -X POST localhost:8080/api/v1/missions \
 curl -s 'localhost:8080/api/v1/events?since=0&format=json'
 ```
 
-Requirements: Go 1.22+.
+Requirements: Go 1.22+, Node 20+ (for Mission Control).
 
 Host OpenAPI: [`schemas/openapi-host-v1.yaml`](./schemas/openapi-host-v1.yaml).
 
@@ -101,7 +105,8 @@ scripts/             # Dev helpers
 | **H0** Product foundation | Done |
 | **H1** Host API `/api/v1` + events | Done |
 | **H2** Plugin loader + execute path | Done |
-| **H3** Mission Control re-home | Next |
+| **H3** Mission Control re-home | Done (core host surfaces) |
+| **H4** Interchangeability proof | Next |
 
 Working Agent OS + Mission Control prototypes currently also live in AESP-Reference-Implementation until Hermes reaches full product parity (deliberate migration, not abandonment).
 
