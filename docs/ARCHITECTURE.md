@@ -66,12 +66,18 @@ kernel/
   pkg/
     types/              # domain IDs, trust, tiers, modes
     host/               # Host Interface (INV-11)
-    plugin/             # manifest + registry (INV-02)
+    plugin/             # manifest, registry, loader, factories (INV-02)
     provider/           # Provider contract (INV-01)
     runtime/            # Runtime + ContextEnvelope (INV-01, INV-05)
     capability/         # normalize / match (INV-03)
     router/             # capability → provider/runtime (INV-03)
-    kernel/             # Kernel implementation of host.Interface
+    credentials/        # unified credential broker (INV-07)
+    memorystore/        # unified memory (INV-06)
+    eventbus/           # monotonic seq journal (INV-10)
+    httpapi/            # /api/v1 Host HTTP + WS
+    adapters/echo/      # example provider + runtime (no vendor)
+    bootstrap/          # factory registration + disk load
+    kernel/             # Kernel: route → execute → memory
 ```
 
 **Invariant:** no vendor package imports in `pkg/kernel`, `pkg/router`, `pkg/capability`, `pkg/host`.

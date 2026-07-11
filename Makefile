@@ -29,8 +29,11 @@ smoke: build ## HTTP smoke against a temporary server
 	  curl -sf http://127.0.0.1:18080/api/v1/health | grep -q '"status":"ok"'; \
 	  curl -sf -X POST http://127.0.0.1:18080/api/v1/missions \
 	    -H 'Content-Type: application/json' \
-	    -d '{"goal":"smoke","requiredCapabilities":["coding"]}' | grep -q '"state":"running"'; \
-	  curl -sf 'http://127.0.0.1:18080/api/v1/events?since=0&format=json' | grep -q '"seq"'; \
+	    -d '{"goal":"smoke","requiredCapabilities":["coding","tools"]}' | tee /tmp/hermes-smoke.json | grep -q '"state":"succeeded"'; \
+	  grep -q '"providerId":"provider.example.echo"' /tmp/hermes-smoke.json; \
+	  curl -sf 'http://127.0.0.1:18080/api/v1/events?since=0&format=json' | grep -q 'route.decided'; \
+	  curl -sf 'http://127.0.0.1:18080/api/v1/memory/search' | grep -q 'mem_'; \
+	  curl -sf 'http://127.0.0.1:18080/api/v1/credentials' | grep -q 'cred_'; \
 	  kill $$pid 2>/dev/null; wait $$pid 2>/dev/null; \
 	  echo "smoke ok"
 

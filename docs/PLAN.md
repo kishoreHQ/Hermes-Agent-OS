@@ -44,10 +44,13 @@
 
 ### Phase H2 — Plugin runtime
 
-- Disk/process plugin loader (manifest discovery)  
-- In-tree example provider + example runtime (no real vendor lock)  
-- Credential broker interface (handles only)  
-- Memory plugin interface + in-memory implementation  
+- [x] Disk plugin loader (manifest discovery + driver factories)  
+- [x] In-tree example providers (echo free-local + budget) + echo runtime  
+- [x] Credential broker (handles only; Host lists metadata)  
+- [x] Memory store interface + in-memory implementation + search API  
+- [x] Mission path: route → credential → runtime → provider complete → memory write  
+- [x] Events: `route.decided`, `credential.issued`, `runtime.*`, `memory.written`  
+- [ ] Out-of-process / RPC plugin sandbox (H2.1 / later)  
 
 ### Phase H3 — Mission Control product home
 

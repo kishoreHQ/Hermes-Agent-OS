@@ -13,12 +13,12 @@ import (
 type MissionState string
 
 const (
-	StateQueued            MissionState = "queued"
-	StateRunning           MissionState = "running"
-	StateSucceeded         MissionState = "succeeded"
-	StateFailed            MissionState = "failed"
-	StateCancelled         MissionState = "cancelled"
-	StateAwaitingApproval  MissionState = "awaiting_approval"
+	StateQueued           MissionState = "queued"
+	StateRunning          MissionState = "running"
+	StateSucceeded        MissionState = "succeeded"
+	StateFailed           MissionState = "failed"
+	StateCancelled        MissionState = "cancelled"
+	StateAwaitingApproval MissionState = "awaiting_approval"
 )
 
 // Interface is the sole host interaction surface (INV-11).
@@ -42,6 +42,11 @@ type Mission struct {
 	RequiredCaps []types.Capability `json:"requiredCapabilities"`
 	Labels       map[string]string  `json:"labels,omitempty"`
 	CostUSD      float64            `json:"costUsd,omitempty"`
+	Output       string             `json:"output,omitempty"`
+	ProviderID   types.PluginID     `json:"providerId,omitempty"`
+	RuntimeID    types.PluginID     `json:"runtimeId,omitempty"`
+	ModelID      string             `json:"modelId,omitempty"`
+	RouteReason  string             `json:"routeReason,omitempty"`
 	CreatedAt    time.Time          `json:"createdAt"`
 	UpdatedAt    time.Time          `json:"updatedAt"`
 	CancelReason string             `json:"cancelReason,omitempty"`

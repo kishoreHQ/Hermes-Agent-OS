@@ -14,8 +14,20 @@ All integrations live here (or in future extracted repos).
 
 Each plugin ships:
 
-1. `plugin.yaml` (or `.json`) manifest — `apiVersion: hermes.plugin/v1`  
-2. Implementation package (Go preferred for in-tree)  
-3. Tests proving health + capability descriptors  
+1. `plugin.yaml` (or `.yml`) — `apiVersion: hermes.plugin/v1`  
+2. `labels.hermes.driver` — selects an in-tree factory (e.g. `echo-provider`)  
+3. Implementation registered in `kernel/pkg/bootstrap` (or future out-of-process loaders)  
+4. Tests proving health + capability descriptors  
 
-See [docs/adr/0002-everything-is-a-plugin.md](../docs/adr/0002-everything-is-a-plugin.md).
+### Shipped examples (H2)
+
+| Path | Driver | Role |
+|------|--------|------|
+| `providers/example-echo` | `echo-provider` | free-local inference |
+| `providers/example-budget` | `echo-provider` | budget-tier inference (routing demo) |
+| `runtimes/example-echo` | `echo-runtime` | one-step harness via Completer |
+| `memory/ephemeral` | `memory-ephemeral` | discovery marker; kernel owns store |
+
+Env: `HERMES_PLUGINS` may point at additional roots (`:`-separated).
+
+See [docs/adr/0002-everything-is-a-plugin.md](../docs/adr/0002-everything-is-a-plugin.md), [docs/adr/0007-plugin-runtime-h2.md](../docs/adr/0007-plugin-runtime-h2.md).

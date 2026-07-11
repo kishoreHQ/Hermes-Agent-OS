@@ -6,21 +6,18 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/bootstrap"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/httpapi"
-	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/kernel"
-	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
-	"gopkg.in/yaml.v3"
 )
 
 func main() {
 	if len(os.Args) < 2 {
 		printBanner()
 		fmt.Println("usage: hermesd <command>")
-		fmt.Println("  status              print foundation status")
+		fmt.Println("  status              print platform status")
 		fmt.Println("  serve [addr]        Host API (default :8080)")
 		os.Exit(0)
 	}
@@ -50,22 +47,33 @@ func printBanner() {
 	fmt.Println("principle: providers ≠ runtimes · everything is a plugin")
 }
 
-func newKernel() *kernel.Kernel {
-	reg := plugin.NewMemoryRegistry()
-	loadExamplePlugins(reg)
-	return kernel.New(reg)
+func boot() (*bootstrap.Result, error) {
+	return bootstrap.New(bootstrap.Options{SeedBuiltins: true})
 }
 
 func runStatus() {
-	k := newKernel()
+	res, err := boot()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	printBanner()
-	fmt.Println("status: H1 Host API")
-	fmt.Println("plugins registered:", len(k.Plugins().List("")))
-	fmt.Println("endpoints: /api/v1/health /api/v1/missions /api/v1/events /api/v1/registry/*")
+	fmt.Println("status: H2 plugin runtime")
+	fmt.Println("plugins registered:", len(res.Registry.List("")))
+	fmt.Println("loaded from disk/seed:", res.Loaded)
+	if res.LoadWarnings != "" {
+		fmt.Println("load notes:", res.LoadWarnings)
+	}
+	fmt.Println("endpoints: /api/v1/health /api/v1/missions /api/v1/events")
+	fmt.Println("           /api/v1/registry/* /api/v1/memory/search /api/v1/credentials")
 }
 
 func runServe(addr string) error {
-	k := newKernel()
+	res, err := boot()
+	if err != nil {
+		return err
+	}
+	k := res.Kernel
 	if err := k.Health(context.Background()); err != nil {
 		return err
 	}
@@ -75,14 +83,18 @@ func runServe(addr string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	printBanner()
-	fmt.Printf("serving Host API on %s\n", addr)
+	fmt.Printf("serving Host API on %s (H2)\n", addr)
+	fmt.Printf("  plugins: %d (disk/seed loaded=%d)\n", len(k.Plugins().List("")), res.Loaded)
+	if res.LoadWarnings != "" {
+		fmt.Printf("  load notes: %s\n", res.LoadWarnings)
+	}
 	fmt.Printf("  GET  /api/v1/health\n")
-	fmt.Printf("  GET  /api/v1/missions\n")
-	fmt.Printf("  POST /api/v1/missions\n")
+	fmt.Printf("  POST /api/v1/missions   → route → provider → runtime → memory\n")
 	fmt.Printf("  GET  /api/v1/events?since=0&format=json\n")
 	fmt.Printf("  WS   /api/v1/events\n")
 	fmt.Printf("  GET  /api/v1/registry/{providers|runtimes|tools}\n")
-	fmt.Printf("plugins: %d\n", len(k.Plugins().List("")))
+	fmt.Printf("  GET  /api/v1/memory/search?q=\n")
+	fmt.Printf("  GET  /api/v1/credentials  (handles only)\n")
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -104,74 +116,4 @@ func runServe(addr string) error {
 		fmt.Println("shutdown")
 		return nil
 	}
-}
-
-// loadExamplePlugins registers example manifests from plugins/ if present,
-// otherwise seeds in-process example provider + runtime.
-func loadExamplePlugins(reg plugin.Registry) {
-	roots := []string{
-		"plugins",
-		filepath.Join("..", "plugins"),
-		filepath.Join("..", "..", "plugins"),
-	}
-	loaded := 0
-	for _, root := range roots {
-		n, _ := loadPluginDir(reg, filepath.Join(root, "providers"))
-		loaded += n
-		n, _ = loadPluginDir(reg, filepath.Join(root, "runtimes"))
-		loaded += n
-		if loaded > 0 {
-			return
-		}
-	}
-	// Seed when no files found (tests / bare binary)
-	_ = reg.Register(plugin.Manifest{
-		APIVersion: "hermes.plugin/v1",
-		Kind:       plugin.KindProvider,
-		Metadata:   plugin.Metadata{ID: "provider.example.echo", Version: "0.0.1", Name: "Example Echo Provider"},
-		Spec: map[string]any{
-			"capabilities": []any{"coding", "tools"},
-			"local":        true,
-			"costTier":     "free-local",
-		},
-		Labels: map[string]string{"hermes.example": "true"},
-	}, nil)
-	_ = reg.Register(plugin.Manifest{
-		APIVersion: "hermes.plugin/v1",
-		Kind:       plugin.KindRuntime,
-		Metadata:   plugin.Metadata{ID: "runtime.example.echo", Version: "0.0.1", Name: "Example Echo Runtime"},
-		Spec: map[string]any{
-			"sandboxTier": "process-pty",
-		},
-		Labels: map[string]string{"hermes.example": "true"},
-	}, nil)
-}
-
-func loadPluginDir(reg plugin.Registry, dir string) (int, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return 0, err
-	}
-	n := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		path := filepath.Join(dir, e.Name(), "plugin.yaml")
-		b, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var m plugin.Manifest
-		if err := yaml.Unmarshal(b, &m); err != nil {
-			fmt.Fprintf(os.Stderr, "warn: %s: %v\n", path, err)
-			continue
-		}
-		if err := reg.Register(m, nil); err != nil {
-			fmt.Fprintf(os.Stderr, "warn: register %s: %v\n", path, err)
-			continue
-		}
-		n++
-	}
-	return n, nil
 }

@@ -5,11 +5,12 @@ metadata:
   version: 0.0.1
   name: Example Echo Runtime
 spec:
-  # Illustrative harness double — no PTY, no vendor CLI.
   sandboxTier: process-pty
   capabilitiesIn:
     - coding
+    - tools
   capabilitiesOut:
     - artifacts
 labels:
+  hermes.driver: echo-runtime
   hermes.example: "true"

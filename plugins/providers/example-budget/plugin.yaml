@@ -1,19 +1,20 @@
 apiVersion: hermes.plugin/v1
 kind: provider
 metadata:
-  id: provider.example.echo
+  id: provider.example.budget
   version: 0.0.1
-  name: Example Echo Provider
+  name: Example Budget Provider
 spec:
+  # Still vendor-neutral — higher cost tier for routing demos.
   capabilities:
     - coding
     - tools
-  local: true
-  costTier: free-local
+  local: false
+  costTier: budget
   models:
-    - id: echo-1
+    - id: budget-1
       capabilities: [coding, tools]
-      costTier: free-local
+      costTier: budget
 labels:
   hermes.driver: echo-provider
   hermes.example: "true"

@@ -11,11 +11,12 @@ import (
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/host"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/kernel"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
-const Version = "hermesd-host/0.1.0"
+const Version = "hermesd-host/0.2.0"
 
 // Server is the Host HTTP surface.
 type Server struct {
@@ -36,6 +37,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/replay/", s.apiReplay)
 	mux.HandleFunc("/api/v1/events", s.apiEvents) // GET catch-up JSON or WS upgrade
 	mux.HandleFunc("/api/v1/plugins", s.apiPlugins)
+	mux.HandleFunc("/api/v1/memory/search", s.apiMemorySearch)
+	mux.HandleFunc("/api/v1/credentials", s.apiCredentials)
 	return withCORS(mux)
 }
 
@@ -258,6 +261,41 @@ func (s *Server) apiReplay(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) apiMemorySearch(w http.ResponseWriter, r *http.Request) {
+	q := memorystore.Query{
+		Text:      r.URL.Query().Get("q"),
+		MissionID: types.MissionID(r.URL.Query().Get("mission")),
+		Kind:      memorystore.Kind(r.URL.Query().Get("kind")),
+		Limit:     50,
+	}
+	hits, err := s.k.Memory().Search(r.Context(), q)
+	if err != nil {
+		writeErr(w, 500, "search_failed", err.Error(), "Retry.")
+		return
+	}
+	writeOK(w, memorystore.AsMaps(hits))
+}
+
+func (s *Server) apiCredentials(w http.ResponseWriter, r *http.Request) {
+	// Metadata only — never secrets (INV-07)
+	list, err := s.k.Creds().List(r.Context())
+	if err != nil {
+		writeErr(w, 500, "list_failed", err.Error(), "Retry.")
+		return
+	}
+	out := make([]map[string]any, 0, len(list))
+	for _, rec := range list {
+		out = append(out, map[string]any{
+			"handle":    string(rec.Handle),
+			"scope":     rec.Scope,
+			"label":     rec.Label,
+			"pluginId":  string(rec.PluginID),
+			"createdAt": rec.CreatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	writeOK(w, out)
+}
+
 func missionJSON(m host.Mission) map[string]any {
 	caps := make([]string, 0, len(m.RequiredCaps))
 	for _, c := range m.RequiredCaps {
@@ -275,6 +313,11 @@ func missionJSON(m host.Mission) map[string]any {
 		"requiredCapabilities": caps,
 		"labels":               m.Labels,
 		"costUsd":              m.CostUSD,
+		"output":               m.Output,
+		"providerId":           string(m.ProviderID),
+		"runtimeId":            string(m.RuntimeID),
+		"modelId":              m.ModelID,
+		"routeReason":          m.RouteReason,
 		"createdAt":            m.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt":            m.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		"cancelReason":         m.CancelReason,

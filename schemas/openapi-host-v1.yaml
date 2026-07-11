@@ -148,6 +148,32 @@ paths:
       responses:
         "200":
           description: Plugin manifests
+  /api/v1/memory/search:
+    get:
+      summary: Search unified Hermes memory (INV-06)
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: mission
+          in: query
+          schema:
+            type: string
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [episodic, semantic, procedural, artifact, evaluation]
+      responses:
+        "200":
+          description: Memory entries with trust labels
+  /api/v1/credentials:
+    get:
+      summary: List credential handles (never secrets) (INV-07)
+      responses:
+        "200":
+          description: Handle metadata only
 components:
   parameters:
     MissionId:

@@ -8,6 +8,7 @@
 | [0004](./0004-capability-based-routing.md) | Capability-based routing | Accepted |
 | [0005](./0005-multi-repo-topology.md) | Multi-repo topology (monorepo first) | Accepted |
 | [0006](./0006-host-api-surface.md) | Host API surface (`/api/v1`) | Accepted |
+| [0007](./0007-plugin-runtime-h2.md) | Plugin runtime (disk loader + factories) | Accepted |
 
 Process: propose → challenge (reviewer personas) → accept/reject → implement.  
 Superseding an ADR requires a new ADR that links the old one.

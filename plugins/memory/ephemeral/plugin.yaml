@@ -1,0 +1,11 @@
+apiVersion: hermes.plugin/v1
+kind: memory
+metadata:
+  id: memory.example.ephemeral
+  version: 0.0.1
+  name: Ephemeral In-Process Memory
+spec:
+  backend: memory
+labels:
+  hermes.driver: memory-ephemeral
+  hermes.example: "true"

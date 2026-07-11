@@ -99,9 +99,9 @@ scripts/             # Dev helpers
 | Phase | State |
 |-------|--------|
 | **H0** Product foundation | Done |
-| **H1** Host API `/api/v1` + events | Done (core surface) |
-| **H2** Plugin loader + real adapters | Next |
-| **H3** Mission Control re-home | Planned |
+| **H1** Host API `/api/v1` + events | Done |
+| **H2** Plugin loader + execute path | Done |
+| **H3** Mission Control re-home | Next |
 
 Working Agent OS + Mission Control prototypes currently also live in AESP-Reference-Implementation until Hermes reaches full product parity (deliberate migration, not abandonment).
 
