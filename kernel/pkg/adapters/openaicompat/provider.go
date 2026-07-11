@@ -78,8 +78,63 @@ func (p *Provider) Health(ctx context.Context) error {
 }
 
 func (p *Provider) Describe(ctx context.Context) (provider.Descriptor, error) {
-	return p.desc, nil
+	d := p.desc
+	d.BaseURL = p.baseURL
+	// Best-effort refresh models into descriptor for routing
+	if models, err := p.ListModels(ctx); err == nil && len(models) > 0 {
+		d.Models = models
+	}
+	return d, nil
 }
+
+// ListModels auto-discovers models via GET {base}/models (OpenAI-compatible).
+func (p *Provider) ListModels(ctx context.Context) ([]provider.ModelInfo, error) {
+	url := p.modelsURL()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	p.auth(req, p.apiKey)
+	if p.Resolve != nil {
+		// try empty handle skip; Resolve only with real handle from Complete path
+	}
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("list models http %d: %s", resp.StatusCode, string(raw))
+	}
+	var body struct {
+		Data []struct {
+			ID      string `json:"id"`
+			OwnedBy string `json:"owned_by"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, err
+	}
+	out := make([]provider.ModelInfo, 0, len(body.Data))
+	for _, m := range body.Data {
+		if m.ID == "" {
+			continue
+		}
+		out = append(out, provider.ModelInfo{
+			ID: m.ID, OwnedBy: m.OwnedBy,
+			Capabilities: p.desc.Capabilities, CostTier: p.desc.CostTier,
+		})
+	}
+	if len(out) == 0 {
+		return p.desc.Models, nil
+	}
+	// cache into descriptor for subsequent Describe
+	p.desc.Models = out
+	return out, nil
+}
+
+var _ provider.ModelCatalog = (*Provider)(nil)
 
 type chatReq struct {
 	Model    string        `json:"model"`

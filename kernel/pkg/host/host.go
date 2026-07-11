@@ -44,6 +44,15 @@ type Mission struct {
 	Labels       map[string]string  `json:"labels,omitempty"`
 	CostUSD      float64            `json:"costUsd,omitempty"`
 	Output       string             `json:"output,omitempty"`
+	// PreferProvider / PreferModel are optional operator selections (soft unless RequireProvider).
+	PreferProvider types.PluginID `json:"preferProvider,omitempty"`
+	RequireProvider types.PluginID `json:"requireProvider,omitempty"`
+	PreferModel    string         `json:"preferModel,omitempty"`
+	// Providers allowlist (plugin ids); empty = all capable.
+	Providers []types.PluginID `json:"providers,omitempty"`
+	// Failover defaults true when unset via labels.
+	Failover *bool `json:"failover,omitempty"`
+
 	ProviderID   types.PluginID     `json:"providerId,omitempty"`
 	RuntimeID    types.PluginID     `json:"runtimeId,omitempty"`
 	ModelID      string             `json:"modelId,omitempty"`

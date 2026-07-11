@@ -35,6 +35,13 @@ func (p *Provider) Describe(ctx context.Context) (provider.Descriptor, error) {
 	return p.desc, nil
 }
 
+// ListModels returns static models (echo has no remote discovery).
+func (p *Provider) ListModels(ctx context.Context) ([]provider.ModelInfo, error) {
+	return p.desc.Models, nil
+}
+
+var _ provider.ModelCatalog = (*Provider)(nil)
+
 func (p *Provider) Complete(ctx context.Context, req provider.CompletionRequest) (provider.CompletionResponse, error) {
 	model := req.Model
 	if model == "" && len(p.desc.Models) > 0 {

@@ -33,11 +33,34 @@ export const api = {
 
   getMission: (id: string) => request<Mission>(`/api/v1/missions/${encodeURIComponent(id)}`),
 
-  createMission: (input: { goal: string; name?: string; requiredCapabilities: string[] }) =>
+  createMission: (input: {
+    goal: string
+    name?: string
+    requiredCapabilities: string[]
+    preferProvider?: string
+    requireProvider?: string
+    preferModel?: string
+    model?: string
+    providers?: string[]
+    failover?: boolean
+    labels?: Record<string, string>
+  }) =>
     request<Mission>('/api/v1/missions', {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  listProviderModels: () =>
+    request<
+      Array<{
+        id: string
+        name?: string
+        health?: string
+        local?: boolean
+        costTier?: string
+        models?: Array<{ id: string; costTier?: string }>
+      }>
+    >('/api/v1/providers/models'),
 
   cancelMission: (id: string, reason = 'ui-cancel') =>
     request<{ id: string; state: string }>(`/api/v1/missions/${encodeURIComponent(id)}/cancel`, {

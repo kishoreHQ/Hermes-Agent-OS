@@ -17,7 +17,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
-const Version = "hermesd-host/0.7.0"
+const Version = "hermesd-host/0.8.0"
 
 // Server is the Host HTTP surface.
 type Server struct {
@@ -134,6 +134,13 @@ func (s *Server) apiMissions(w http.ResponseWriter, r *http.Request) {
 			Mode                 string            `json:"mode"`
 			RequiredCapabilities []string          `json:"requiredCapabilities"`
 			Labels               map[string]string `json:"labels"`
+			// Multi-provider selection
+			PreferProvider  string   `json:"preferProvider"`
+			RequireProvider string   `json:"requireProvider"`
+			PreferModel     string   `json:"preferModel"`
+			Model           string   `json:"model"` // alias
+			Providers       []string `json:"providers"`
+			Failover        *bool    `json:"failover"`
 		}
 		if err := json.Unmarshal(body, &req); err != nil && len(body) > 0 {
 			writeErr(w, 400, "bad_json", err.Error(), "Send valid JSON.")
@@ -164,9 +171,22 @@ func (s *Server) apiMissions(w http.ResponseWriter, r *http.Request) {
 				labels["security.mode"] = req.Mode
 			}
 		}
+		model := req.PreferModel
+		if model == "" {
+			model = req.Model
+		}
+		var provs []types.PluginID
+		for _, p := range req.Providers {
+			provs = append(provs, types.PluginID(p))
+		}
 		id, err := s.k.SubmitMission(r.Context(), host.Mission{
 			Name: req.Name, Goal: req.Goal, RequiredCaps: caps, Labels: labels,
-			Mode: types.AgentMode(req.Mode),
+			Mode:            types.AgentMode(req.Mode),
+			PreferProvider:  types.PluginID(req.PreferProvider),
+			RequireProvider: types.PluginID(req.RequireProvider),
+			PreferModel:     model,
+			Providers:       provs,
+			Failover:        req.Failover,
 		})
 		if err != nil {
 			writeErr(w, 400, "submit_failed", err.Error(), "Fix capabilities or goal.")

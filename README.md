@@ -115,6 +115,7 @@ scripts/             # Dev helpers
 | **H3.1** Command Deck | Done |
 | **Provider** OpenAI-compatible | Done (`provider.openai.compat`) |
 | **Catalog gaps** (impact order) | Done — `make conform-full` green |
+| **Multi-provider failover + model discovery** | Done — see `docs/MULTI_PROVIDER.md` |
 
 Working Agent OS + Mission Control prototypes currently also live in AESP-Reference-Implementation until Hermes reaches full product parity (deliberate migration, not abandonment).
 

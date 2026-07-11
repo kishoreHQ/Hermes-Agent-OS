@@ -1,14 +1,24 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/api/client'
 import { useCreateMission, useMissions } from '@/api/hooks'
 import { stateChip } from '@/lib/state'
 
 export function MissionsPage() {
   const missions = useMissions()
   const create = useCreateMission()
+  const fleet = useQuery({ queryKey: ['provider-models'], queryFn: api.listProviderModels, refetchInterval: 15000 })
   const [goal, setGoal] = useState('')
   const [caps, setCaps] = useState('coding, tools')
+  const [provider, setProvider] = useState('')
+  const [model, setModel] = useState('')
+  const [failover, setFailover] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const providers = fleet.data ?? []
+  const selected = providers.find((p) => p.id === provider)
+  const models = selected?.models ?? []
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -18,7 +28,13 @@ export function MissionsPage() {
       .map((s) => s.trim())
       .filter(Boolean)
     try {
-      await create.mutateAsync({ goal, requiredCapabilities })
+      await create.mutateAsync({
+        goal,
+        requiredCapabilities,
+        preferProvider: provider || undefined,
+        preferModel: model || undefined,
+        failover,
+      })
       setGoal('')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -57,6 +73,50 @@ export function MissionsPage() {
             placeholder="coding, tools"
             required
           />
+        </label>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="block text-sm">
+            <span className="text-[var(--ink-2)] text-xs">Prefer provider (optional)</span>
+            <select
+              className="input mt-1"
+              value={provider}
+              onChange={(e) => {
+                setProvider(e.target.value)
+                setModel('')
+              }}
+            >
+              <option value="">Auto (capability + tier)</option>
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || p.id} {p.health?.startsWith('healthy') ? '' : '(unhealthy)'}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="text-[var(--ink-2)] text-xs">Prefer model (optional, auto-discovered)</span>
+            <select
+              className="input mt-1 font-mono"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={!provider}
+            >
+              <option value="">Default for provider</option>
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-[var(--ink-1)]">
+          <input
+            type="checkbox"
+            checked={failover}
+            onChange={(e) => setFailover(e.target.checked)}
+          />
+          Failover to next healthy provider if complete fails
         </label>
         {error && <p className="text-sm text-[var(--fail)]">{error}</p>}
         <button type="submit" className="btn btn-primary" disabled={create.isPending || !goal}>

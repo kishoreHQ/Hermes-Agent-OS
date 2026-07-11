@@ -12,10 +12,14 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/docgen"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/knowledge"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/planner"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/provider"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
 func (s *Server) registerPlatformRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/v1/providers/models", s.apiProvidersModels)
+	mux.HandleFunc("/api/v1/providers/", s.apiProviderSub)
 	mux.HandleFunc("/api/v1/artifacts", s.apiArtifacts)
 	mux.HandleFunc("/api/v1/artifacts/", s.apiArtifactSub)
 	mux.HandleFunc("/api/v1/agents", s.apiAgents)
@@ -36,6 +40,66 @@ func (s *Server) registerPlatformRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/deploy/sessions/", s.apiDeploySub)
 	mux.HandleFunc("/api/v1/docs", s.apiDocs)
 	mux.HandleFunc("/api/v1/docs/generate", s.apiDocsGenerate)
+}
+
+// apiProvidersModels lists all providers with discovered models (auto-discovery when supported).
+func (s *Server) apiProvidersModels(w http.ResponseWriter, r *http.Request) {
+	var out []map[string]any
+	for _, m := range s.k.Plugins().List(plugin.KindProvider) {
+		_, inst, ok := s.k.Plugins().Get(m.Metadata.ID)
+		if !ok {
+			continue
+		}
+		p, ok := inst.(provider.Provider)
+		if !ok {
+			continue
+		}
+		health := "healthy"
+		if err := p.Health(r.Context()); err != nil {
+			health = "unhealthy: " + err.Error()
+		}
+		d, _ := p.Describe(r.Context())
+		models, _ := provider.DiscoverModels(r.Context(), p)
+		modelList := make([]map[string]any, 0, len(models))
+		for _, mi := range models {
+			modelList = append(modelList, map[string]any{
+				"id": mi.ID, "costTier": mi.CostTier, "ownedBy": mi.OwnedBy,
+			})
+		}
+		out = append(out, map[string]any{
+			"id": string(m.Metadata.ID), "name": m.Metadata.Name, "health": health,
+			"local": d.Local, "costTier": d.CostTier, "baseUrl": d.BaseURL,
+			"models": modelList, "modelCount": len(modelList),
+		})
+	}
+	writeOK(w, out)
+}
+
+func (s *Server) apiProviderSub(w http.ResponseWriter, r *http.Request) {
+	// /api/v1/providers/:id/models
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/providers/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 2 || parts[1] != "models" {
+		writeErr(w, 404, "not_found", "GET /api/v1/providers/:id/models", "")
+		return
+	}
+	id := types.PluginID(parts[0])
+	_, inst, ok := s.k.Plugins().Get(id)
+	if !ok {
+		writeErr(w, 404, "not_found", "provider not found", "")
+		return
+	}
+	p, ok := inst.(provider.Provider)
+	if !ok {
+		writeErr(w, 400, "bad_request", "not a provider instance", "")
+		return
+	}
+	models, err := provider.DiscoverModels(r.Context(), p)
+	if err != nil {
+		writeErr(w, 502, "discovery_failed", err.Error(), "Check provider health / credentials")
+		return
+	}
+	writeOK(w, map[string]any{"providerId": string(id), "models": models})
 }
 
 func (s *Server) apiArtifacts(w http.ResponseWriter, r *http.Request) {

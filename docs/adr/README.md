@@ -16,6 +16,7 @@
 | [0012](./0012-aesp-conformance-claim.md) | AESP conformance claim for Hermes product | Accepted |
 | [0013](./0013-command-deck-and-openai-compat.md) | Command Deck + OpenAI-compatible provider | Accepted |
 | [0014](./0014-catalog-gaps-closed.md) | Close remaining AESP catalog gaps by impact | Accepted |
+| [0015](./0015-multi-provider-failover.md) | Multi-provider failover + model discovery | Accepted |
 
 Process: propose → challenge (reviewer personas) → accept/reject → implement.  
 Superseding an ADR requires a new ADR that links the old one.

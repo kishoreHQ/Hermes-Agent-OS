@@ -5,6 +5,7 @@ package kernel
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -279,8 +280,11 @@ func (k *Kernel) SubmitMission(ctx context.Context, m host.Mission) (types.Missi
 		},
 	})
 
+	// Merge structured selection fields into labels for routing
+	labels := mergeRouteLabels(m.Labels, m)
+
 	// Execute synchronously (async worker pool later)
-	if err := k.executeMission(ctx, m.ID, req, m.Labels, mode, providers, runtimes); err != nil {
+	if err := k.executeMission(ctx, m.ID, req, labels, mode, providers, runtimes); err != nil {
 		k.setMissionFailed(ctx, m.ID, err)
 		// Still return id — host can inspect failed state
 		return m.ID, nil
@@ -288,25 +292,82 @@ func (k *Kernel) SubmitMission(ctx context.Context, m host.Mission) (types.Missi
 	return m.ID, nil
 }
 
+func mergeRouteLabels(labels map[string]string, m host.Mission) map[string]string {
+	out := map[string]string{}
+	for k, v := range labels {
+		out[k] = v
+	}
+	if m.PreferProvider != "" && out["route.preferProvider"] == "" {
+		out["route.preferProvider"] = string(m.PreferProvider)
+	}
+	if m.RequireProvider != "" && out["route.requireProvider"] == "" {
+		out["route.requireProvider"] = string(m.RequireProvider)
+	}
+	if m.PreferModel != "" && out["route.preferModel"] == "" {
+		out["route.preferModel"] = m.PreferModel
+	}
+	if len(m.Providers) > 0 && out["route.providers"] == "" {
+		parts := make([]string, len(m.Providers))
+		for i, p := range m.Providers {
+			parts[i] = string(p)
+		}
+		out["route.providers"] = strings.Join(parts, ",")
+	}
+	if m.Failover != nil {
+		if *m.Failover {
+			out["route.failover"] = "true"
+		} else {
+			out["route.failover"] = "false"
+		}
+	}
+	return out
+}
+
 func routeOptionsFromLabels(labels map[string]string) router.Options {
-	opts := router.Options{PreferLocal: true, PolicyID: "default"}
+	opts := router.Options{PreferLocal: true, PolicyID: "default", Failover: true}
 	if labels == nil {
 		return opts
 	}
 	if v, ok := labels["route.preferLocal"]; ok && (v == "false" || v == "0") {
 		opts.PreferLocal = false
 	}
+	if v, ok := labels["route.failover"]; ok && (v == "false" || v == "0") {
+		opts.Failover = false
+	}
 	if v := labels["route.preferProvider"]; v != "" {
 		opts.PreferProvider = types.PluginID(v)
 	}
+	// aliases for operator UX
+	if v := labels["route.provider"]; v != "" && opts.PreferProvider == "" {
+		opts.PreferProvider = types.PluginID(v)
+	}
+	if v := labels["route.requireProvider"]; v != "" {
+		opts.RequireProvider = types.PluginID(v)
+	}
 	if v := labels["route.preferRuntime"]; v != "" {
 		opts.PreferRuntime = types.PluginID(v)
+	}
+	if v := labels["route.preferModel"]; v != "" {
+		opts.PreferModel = v
+	}
+	if v := labels["route.model"]; v != "" && opts.PreferModel == "" {
+		opts.PreferModel = v
 	}
 	if v := labels["route.excludeProvider"]; v != "" {
 		opts.ExcludeProvider = map[types.PluginID]bool{types.PluginID(v): true}
 	}
 	if v := labels["route.excludeRuntime"]; v != "" {
 		opts.ExcludeRuntime = map[types.PluginID]bool{types.PluginID(v): true}
+	}
+	// Comma-separated allowlist: route.providers=provider.a,provider.b
+	if v := labels["route.providers"]; v != "" {
+		opts.AllowProviders = map[types.PluginID]bool{}
+		for _, part := range strings.Split(v, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				opts.AllowProviders[types.PluginID(part)] = true
+			}
+		}
 	}
 	if v := labels["route.policyId"]; v != "" {
 		opts.PolicyID = v
@@ -325,13 +386,14 @@ func (k *Kernel) executeMission(
 ) error {
 	r := router.New(providers, runtimes)
 	opts := routeOptionsFromLabels(labels)
-	if opts.PolicyID == "default" {
+	if opts.PolicyID == "default" || opts.PolicyID == "" {
 		opts.PolicyID = k.policy.ID
 	}
-	decision, err := r.RouteWith(ctx, req, opts)
+	candidates, err := r.Candidates(ctx, req, opts)
 	if err != nil {
 		return err
 	}
+	decision := candidates[0]
 
 	_ = k.bus.Publish(ctx, eventbus.Event{
 		Type: "route.decided", MissionID: id,
@@ -345,6 +407,7 @@ func (k *Kernel) executeMission(
 			"policyId":            decision.PolicyID,
 			"providersConsidered": decision.ProvidersConsidered,
 			"runtimesConsidered":  decision.RuntimesConsidered,
+			"failoverChain":       len(candidates),
 		},
 	})
 
@@ -424,66 +487,104 @@ func (k *Kernel) executeMission(
 		return nil
 	}
 
-	if !security.ScopeAllows(sec.Scopes, "runtime:execute") && mode == types.ModeFull {
-		// Full always has runtime:execute in default scopes; keep guard for custom modes.
-	}
-
-	// Credential handle only (INV-07) — prefer operator/env key for provider
-	var handle credentials.Handle
-	if h, ok := k.creds.FindByPlugin(ctx, decision.ProviderID); ok {
-		handle = h
-	} else {
-		var err error
-		handle, err = k.creds.Put(ctx, string(decision.ProviderID), "mission", decision.ProviderID, "hermes-demo-token")
-		if err != nil {
-			return err
-		}
-	}
-	_ = k.bus.Publish(ctx, eventbus.Event{
-		Type: "credential.issued", MissionID: id,
-		Data: map[string]any{"handle": string(handle), "scope": string(decision.ProviderID)},
-	})
-
 	memHits, _ := k.memory.Search(ctx, memorystore.Query{MissionID: id, Limit: 20})
 	global, _ := k.memory.Search(ctx, memorystore.Query{Kind: memorystore.KindSemantic, Limit: 5})
 	memHits = append(memHits, global...)
 
-	k.wireCompleter(rt)
+	// Multi-provider failover: try each candidate until execute succeeds
+	var result runtime.Result
+	var lastErr error
+	for i, cand := range candidates {
+		decision = cand
+		var handle credentials.Handle
+		if h, ok := k.creds.FindByPlugin(ctx, decision.ProviderID); ok {
+			handle = h
+		} else {
+			handle, lastErr = k.creds.Put(ctx, string(decision.ProviderID), "mission", decision.ProviderID, "hermes-demo-token")
+			if lastErr != nil {
+				continue
+			}
+		}
+		_ = k.bus.Publish(ctx, eventbus.Event{
+			Type: "credential.issued", MissionID: id,
+			Data: map[string]any{"handle": string(handle), "scope": string(decision.ProviderID), "rank": i},
+		})
 
-	env := runtime.ContextEnvelope{
-		Mission: map[string]any{
-			"id": string(id), "goal": goal, "mode": string(mode),
-			"requiredCapabilities": capsStrings(req),
-		},
-		Workspace: map[string]any{"profile": "host-neutral"},
-		Memory:    memorystore.AsMaps(memHits),
-		Credentials: []map[string]any{
-			{"handle": string(handle), "scope": string(decision.ProviderID)},
-		},
-		Tools:  k.toolMaps(),
-		Budget: map[string]any{"maxSteps": k.policy.MaxSteps, "maxCostUsd": k.policy.MaxCostUSD},
-		Security: map[string]any{
-			"sandbox": rtDesc.SandboxTier,
-			"mode":    string(mode),
-			"scopes":  sec.Scopes,
-		},
-		Prompt: goal,
-		Correlation: map[string]string{
-			"missionId":  string(id),
-			"providerId": string(decision.ProviderID),
-			"runtimeId":  string(decision.RuntimeID),
-			"modelId":    decision.ModelID,
-		},
+		k.mu.Lock()
+		if mission := k.missions[id]; mission != nil {
+			mission.ProviderID = decision.ProviderID
+			mission.RuntimeID = decision.RuntimeID
+			mission.ModelID = decision.ModelID
+			mission.RouteReason = decision.Reason
+		}
+		k.mu.Unlock()
+
+		k.wireCompleter(rt)
+		env := runtime.ContextEnvelope{
+			Mission: map[string]any{
+				"id": string(id), "goal": goal, "mode": string(mode),
+				"requiredCapabilities": capsStrings(req),
+			},
+			Workspace: map[string]any{"profile": "host-neutral"},
+			Memory:    memorystore.AsMaps(memHits),
+			Credentials: []map[string]any{
+				{"handle": string(handle), "scope": string(decision.ProviderID)},
+			},
+			Tools:  k.toolMaps(),
+			Budget: map[string]any{"maxSteps": k.policy.MaxSteps, "maxCostUsd": k.policy.MaxCostUSD},
+			Security: map[string]any{
+				"sandbox": rtDesc.SandboxTier,
+				"mode":    string(mode),
+				"scopes":  sec.Scopes,
+			},
+			Prompt: goal,
+			Correlation: map[string]string{
+				"missionId":  string(id),
+				"providerId": string(decision.ProviderID),
+				"runtimeId":  string(decision.RuntimeID),
+				"modelId":    decision.ModelID,
+			},
+		}
+
+		_ = k.bus.Publish(ctx, eventbus.Event{
+			Type: "runtime.started", MissionID: id,
+			Data: map[string]any{
+				"runtimeId": string(decision.RuntimeID), "providerId": string(decision.ProviderID),
+				"modelId": decision.ModelID, "sandbox": rtDesc.SandboxTier, "rank": i,
+			},
+		})
+
+		result, lastErr = rt.Execute(ctx, env)
+		if lastErr == nil && result.Status != "failed" {
+			if i > 0 {
+				_ = k.bus.Publish(ctx, eventbus.Event{
+					Type: "provider.failover", MissionID: id,
+					Data: map[string]any{
+						"succeededProviderId": string(decision.ProviderID),
+						"modelId":             decision.ModelID,
+						"rank":                i,
+					},
+				})
+			}
+			lastErr = nil
+			break
+		}
+		errMsg := result.Output
+		if lastErr != nil {
+			errMsg = lastErr.Error()
+		} else {
+			lastErr = fmt.Errorf("provider %s execute status=%s", decision.ProviderID, result.Status)
+		}
+		_ = k.bus.Publish(ctx, eventbus.Event{
+			Type: "provider.failed", MissionID: id,
+			Data: map[string]any{
+				"providerId": string(decision.ProviderID), "modelId": decision.ModelID,
+				"error": errMsg, "rank": i, "willFailover": i+1 < len(candidates),
+			},
+		})
 	}
-
-	_ = k.bus.Publish(ctx, eventbus.Event{
-		Type: "runtime.started", MissionID: id,
-		Data: map[string]any{"runtimeId": string(decision.RuntimeID), "sandbox": rtDesc.SandboxTier},
-	})
-
-	result, err := rt.Execute(ctx, env)
-	if err != nil {
-		return err
+	if lastErr != nil {
+		return lastErr
 	}
 	if err := k.policy.CheckSteps(result.StepsUsed); err != nil {
 		return err
