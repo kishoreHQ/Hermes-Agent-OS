@@ -1,0 +1,19 @@
+apiVersion: hermes.plugin/v1
+kind: provider
+metadata:
+  id: provider.example.echo
+  version: 0.0.1
+  name: Example Echo Provider
+spec:
+  # Illustrative only — not a real vendor.
+  capabilities:
+    - coding
+    - tools
+  local: true
+  costTier: free-local
+  models:
+    - id: echo-1
+      capabilities: [coding, tools]
+      costTier: free-local
+labels:
+  hermes.example: "true"

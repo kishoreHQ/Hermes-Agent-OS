@@ -1,0 +1,35 @@
+# Build
+bin/
+dist/
+*.exe
+*.test
+*.out
+
+# Go
+vendor/
+coverage.out
+coverage.html
+
+# Node / Mission Control
+node_modules/
+mission-control/dist/
+*.local
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Workspaces / secrets
+.aesp-workspace/
+.hermes-workspace/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs
+*.log

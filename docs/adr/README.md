@@ -1,0 +1,12 @@
+# Architecture Decision Records
+
+| ID | Title | Status |
+|----|-------|--------|
+| [0001](./0001-product-boundary.md) | Hermes as product; AESP remains protocol | Accepted |
+| [0002](./0002-everything-is-a-plugin.md) | Everything is a plugin | Accepted |
+| [0003](./0003-provider-neq-runtime.md) | Provider ≠ Runtime | Accepted |
+| [0004](./0004-capability-based-routing.md) | Capability-based routing | Accepted |
+| [0005](./0005-multi-repo-topology.md) | Multi-repo topology (monorepo first) | Accepted |
+
+Process: propose → challenge (reviewer personas) → accept/reject → implement.  
+Superseding an ADR requires a new ADR that links the old one.

@@ -1,0 +1,15 @@
+apiVersion: hermes.plugin/v1
+kind: runtime
+metadata:
+  id: runtime.example.echo
+  version: 0.0.1
+  name: Example Echo Runtime
+spec:
+  # Illustrative harness double — no PTY, no vendor CLI.
+  sandboxTier: process-pty
+  capabilitiesIn:
+    - coding
+  capabilitiesOut:
+    - artifacts
+labels:
+  hermes.example: "true"
