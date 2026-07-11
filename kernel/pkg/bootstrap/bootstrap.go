@@ -141,7 +141,7 @@ func New(opts Options) (*Result, error) {
 // refreshes base URL/models if the disk plugin (plugins/providers/kimchi) already loaded.
 func ensureKimchiProvider(reg plugin.Registry, factories *plugin.FactoryRegistry, k *kernel.Kernel) {
 	base := envOr("HERMES_KIMCHI_BASE_URL", "https://llm.kimchi.dev/openai/v1")
-	model := envOr("HERMES_KIMCHI_MODEL", "kimi-k2.6")
+	model := envOr("HERMES_KIMCHI_MODEL", "kimi-k2.7")
 	_, _, exists := reg.Get("provider.kimchi")
 	keyPresent := firstEnv("KIMCHI_API_KEY", "HERMES_KIMCHI_API_KEY") != ""
 	// Only force-register from env when key is set; disk plugin may already exist.

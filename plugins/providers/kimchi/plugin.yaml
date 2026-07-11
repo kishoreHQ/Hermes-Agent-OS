@@ -15,13 +15,19 @@ spec:
     - coding
     - tools
   models:
-    - id: kimi-k2.6
+    - id: kimi-k2.7
       capabilities: [coding, tools]
       costTier: budget
     - id: minimax-m3
       capabilities: [coding, tools]
       costTier: budget
+    - id: minimax-m2.7
+      capabilities: [coding, tools]
+      costTier: budget
     - id: nemotron-3-ultra-fp4
+      capabilities: [coding, tools]
+      costTier: budget
+    - id: deepseek-v4-flash
       capabilities: [coding, tools]
       costTier: budget
 labels:

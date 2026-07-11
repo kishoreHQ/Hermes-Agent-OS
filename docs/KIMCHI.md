@@ -7,8 +7,8 @@ Source docs: [Cursor setup](https://docs.kimchi.dev/docs/cursor) · [Quickstart]
 |---------|--------|
 | Base URL | `https://llm.kimchi.dev/openai/v1` |
 | Plugin id | `provider.kimchi` |
-| Default model | `kimi-k2.6` |
-| Other models | `minimax-m3`, `nemotron-3-ultra-fp4` |
+| Default model | `kimi-k2.7` |
+| Other models | `minimax-m3`, `minimax-m2.7`, `nemotron-3-ultra-fp4`, `deepseek-v4-flash`, … |
 | API key | [app.kimchi.dev/settings](https://app.kimchi.dev/settings) |
 
 > **Note:** Cursor UI model ids use a `kimchi/` prefix (`kimchi/kimi-k2.6`). The **API** model id is without that prefix (`kimi-k2.6`). Hermes uses the API ids.
@@ -39,7 +39,7 @@ curl -s -X POST localhost:8080/api/v1/provider-configs \
   -d '{
     "fromTemplate": "kimchi",
     "name": "Kimchi",
-    "defaultModel": "kimi-k2.6"
+    "defaultModel": "kimi-k2.7"
   }'
 ```
 
@@ -51,7 +51,7 @@ curl -s -X POST localhost:8080/api/v1/provider-configs \
 export KIMCHI_API_KEY='your-key-from-app.kimchi.dev'
 # optional overrides
 # export HERMES_KIMCHI_BASE_URL='https://llm.kimchi.dev/openai/v1'
-# export HERMES_KIMCHI_MODEL='kimi-k2.6'
+# export HERMES_KIMCHI_MODEL='kimi-k2.7'
 
 make serve
 ```
@@ -66,7 +66,7 @@ curl -s -X POST localhost:8080/api/v1/provider-configs \
   -d '{
     "fromTemplate": "kimchi",
     "apiKey": "your-key-from-app.kimchi.dev",
-    "defaultModel": "kimi-k2.6"
+    "defaultModel": "kimi-k2.7"
   }'
 ```
 
@@ -98,7 +98,7 @@ curl -s -X POST localhost:8080/api/v1/missions \
     "goal": "Explain what a Kubernetes DaemonSet does in one sentence.",
     "requiredCapabilities": ["coding", "tools"],
     "preferProvider": "provider.kimchi",
-    "preferModel": "kimi-k2.6",
+    "preferModel": "kimi-k2.7",
     "failover": true
   }' | jq .
 ```
@@ -111,18 +111,20 @@ curl https://llm.kimchi.dev/openai/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $KIMCHI_API_KEY" \
   -d '{
-    "model": "kimi-k2.6",
+    "model": "kimi-k2.7",
     "messages": [{"role":"user","content":"ping"}]
   }'
 ```
+
+> **Note:** `kimi-k2.6` returns HTTP 410 — use `kimi-k2.7` (Kimchi may still list older ids).
 
 ## 4. Multi-model routing tips
 
 | Role | Model |
 |------|--------|
-| Planning / deep work | `kimi-k2.6` (260K context) |
-| Code gen / debug | `minimax-m3` |
-| Fast / cheap | `nemotron-3-ultra-fp4` |
+| Planning / deep work | `kimi-k2.7` |
+| Code gen / debug | `minimax-m3` / `minimax-m2.7` |
+| Fast / cheap | `nemotron-3-ultra-fp4`, `deepseek-v4-flash` |
 
 ```json
 {
@@ -140,4 +142,4 @@ curl https://llm.kimchi.dev/openai/v1/chat/completions \
 | `KIMCHI_API_KEY` | Official Kimchi key (preferred) |
 | `HERMES_KIMCHI_API_KEY` | Alias for Hermes |
 | `HERMES_KIMCHI_BASE_URL` | Override base (default `https://llm.kimchi.dev/openai/v1`) |
-| `HERMES_KIMCHI_MODEL` | Default model id (default `kimi-k2.6`) |
+| `HERMES_KIMCHI_MODEL` | Default model id (default `kimi-k2.7`) |

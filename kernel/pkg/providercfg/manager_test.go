@@ -70,7 +70,7 @@ func TestTemplatesPopular(t *testing.T) {
 	if k.BaseURL != "https://llm.kimchi.dev/openai/v1" {
 		t.Fatalf("kimchi baseURL %q", k.BaseURL)
 	}
-	if k.DefaultModel != "kimi-k2.6" {
+	if k.DefaultModel != "kimi-k2.7" {
 		t.Fatalf("kimchi model %q", k.DefaultModel)
 	}
 }

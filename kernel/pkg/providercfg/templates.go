@@ -29,11 +29,11 @@ func Templates() []Template {
 			// Docs: https://docs.kimchi.dev/docs/cursor · https://docs.kimchi.dev/docs/inference-quickstart
 			// Base URL: https://llm.kimchi.dev/openai/v1 · Key: app.kimchi.dev/settings
 			ID: "kimchi", Name: "Kimchi", Driver: "openai-compat",
-			Description: "Kimchi Inference — open-source models (Kimi K2.6, MiniMax M3) via OpenAI-compatible API",
+			Description: "Kimchi Inference — open-source models (Kimi K2.7, MiniMax M3) via OpenAI-compatible API",
 			BaseURL: "https://llm.kimchi.dev/openai/v1", Local: false, CostTier: types.TierBudget,
-			DefaultModel: "kimi-k2.6", NeedsAPIKey: true, Category: "cloud",
+			DefaultModel: "kimi-k2.7", NeedsAPIKey: true, Category: "cloud",
 			DocsURL: "https://docs.kimchi.dev/docs/cursor",
-			SuggestedModels: []string{"kimi-k2.6", "minimax-m3", "nemotron-3-ultra-fp4"},
+			SuggestedModels: []string{"kimi-k2.7", "kimi-k2.5", "minimax-m3", "minimax-m2.7", "nemotron-3-ultra-fp4", "deepseek-v4-flash", "glm-5.2-fp8", "qwen3-coder-next-fp8"},
 		},
 		{
 			ID: "openai", Name: "OpenAI", Driver: "openai-compat",
