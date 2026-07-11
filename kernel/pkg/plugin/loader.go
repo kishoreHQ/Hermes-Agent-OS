@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/security"
 	"gopkg.in/yaml.v3"
 )
 
@@ -69,6 +70,14 @@ func (l *Loader) LoadFile(path string) (LoadResult, error) {
 	}
 	if m.Metadata.ID == "" {
 		return LoadResult{}, fmt.Errorf("%s: metadata.id required", path)
+	}
+	// Optional / required HMAC signature (H5)
+	sig := ""
+	if m.Labels != nil {
+		sig = m.Labels["hermes.signature"]
+	}
+	if err := security.VerifyPluginIdentity(m.APIVersion, string(m.Kind), string(m.Metadata.ID), m.Metadata.Version, sig); err != nil {
+		return LoadResult{}, fmt.Errorf("%s: %w", path, err)
 	}
 	inst, err := l.Factories.Create(m)
 	if err != nil {

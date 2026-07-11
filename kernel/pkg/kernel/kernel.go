@@ -16,9 +16,11 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/host"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/policy"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/provider"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/router"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/runtime"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/security"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
@@ -30,6 +32,7 @@ type Kernel struct {
 	caps     *capability.Engine
 	creds    credentials.Broker
 	memory   memorystore.Store
+	policy   policy.Policy
 	missions map[types.MissionID]*host.Mission
 
 	// Live instances collected from registry (refreshed on demand)
@@ -43,6 +46,7 @@ type Options struct {
 	Bus      eventbus.Bus
 	Creds    credentials.Broker
 	Memory   memorystore.Store
+	Policy   *policy.Policy
 }
 
 func New(reg plugin.Registry) *Kernel {
@@ -66,22 +70,28 @@ func NewWithOptions(opts Options) *Kernel {
 	if mem == nil {
 		mem = memorystore.New()
 	}
+	pol := policy.Default()
+	if opts.Policy != nil {
+		pol = *opts.Policy
+	}
 	k := &Kernel{
 		plugins:  reg,
 		bus:      bus,
 		caps:     capability.New(),
 		creds:    creds,
 		memory:   mem,
+		policy:   pol,
 		missions: map[types.MissionID]*host.Mission{},
 	}
 	k.refreshAdapters()
 	return k
 }
 
-func (k *Kernel) Plugins() plugin.Registry      { return k.plugins }
-func (k *Kernel) Bus() eventbus.Bus             { return k.bus }
-func (k *Kernel) Creds() credentials.Broker     { return k.creds }
-func (k *Kernel) Memory() memorystore.Store     { return k.memory }
+func (k *Kernel) Plugins() plugin.Registry  { return k.plugins }
+func (k *Kernel) Bus() eventbus.Bus         { return k.bus }
+func (k *Kernel) Creds() credentials.Broker { return k.creds }
+func (k *Kernel) Memory() memorystore.Store { return k.memory }
+func (k *Kernel) Policy() policy.Policy     { return k.policy }
 
 // RefreshAdapters re-reads provider/runtime instances from the plugin registry.
 func (k *Kernel) RefreshAdapters() {
@@ -168,6 +178,21 @@ func (k *Kernel) SubmitMission(ctx context.Context, m host.Mission) (types.Missi
 		return "", fmt.Errorf("goal required")
 	}
 	m.RequiredCaps = req
+	// Resolve agent mode (field or label security.mode)
+	mode := m.Mode
+	if mode == "" && m.Labels != nil {
+		mode, _ = security.ParseMode(m.Labels["security.mode"])
+	}
+	if mode == "" {
+		mode = k.policy.DefaultMode
+		if mode == "" {
+			mode = types.ModeFull
+		}
+	}
+	if _, err := security.ParseMode(string(mode)); err != nil {
+		return "", err
+	}
+	m.Mode = mode
 	m.State = host.StateRunning
 	m.CreatedAt = now
 	m.UpdatedAt = now
@@ -189,12 +214,12 @@ func (k *Kernel) SubmitMission(ctx context.Context, m host.Mission) (types.Missi
 		Type: "mission.created", MissionID: m.ID,
 		Data: map[string]any{
 			"goal": m.Goal, "name": m.Name, "state": string(m.State),
-			"requiredCapabilities": capsStrings(req),
+			"mode": string(mode), "requiredCapabilities": capsStrings(req),
 		},
 	})
 
 	// Execute synchronously (async worker pool later)
-	if err := k.executeMission(ctx, m.ID, req, m.Labels, providers, runtimes); err != nil {
+	if err := k.executeMission(ctx, m.ID, req, m.Labels, mode, providers, runtimes); err != nil {
 		k.setMissionFailed(ctx, m.ID, err)
 		// Still return id — host can inspect failed state
 		return m.ID, nil
@@ -233,11 +258,15 @@ func (k *Kernel) executeMission(
 	id types.MissionID,
 	req []types.Capability,
 	labels map[string]string,
+	mode types.AgentMode,
 	providers []provider.Provider,
 	runtimes []runtime.Runtime,
 ) error {
 	r := router.New(providers, runtimes)
 	opts := routeOptionsFromLabels(labels)
+	if opts.PolicyID == "default" {
+		opts.PolicyID = k.policy.ID
+	}
 	decision, err := r.RouteWith(ctx, req, opts)
 	if err != nil {
 		return err
@@ -258,7 +287,87 @@ func (k *Kernel) executeMission(
 		},
 	})
 
-	// Credential handle only (INV-07) — demo platform token for echo path
+	// Resolve runtime for sandbox policy (even if we later skip execute)
+	var rt runtime.Runtime
+	var rtDesc runtime.Descriptor
+	for _, rtx := range runtimes {
+		if rtx.ID() == decision.RuntimeID {
+			rt = rtx
+			rtDesc, _ = rtx.Describe(ctx)
+			break
+		}
+	}
+	if rt == nil {
+		return fmt.Errorf("runtime %s not found", decision.RuntimeID)
+	}
+	if err := k.policy.CheckSandbox(rtDesc.SandboxTier); err != nil {
+		return err
+	}
+
+	external := labels != nil && (labels["security.externalAction"] == "true" || labels["security.externalAction"] == "1")
+	sec := security.EvaluateMode(mode, external)
+	_ = k.bus.Publish(ctx, eventbus.Event{
+		Type: "security.evaluated", MissionID: id,
+		Data: map[string]any{
+			"mode": string(sec.Mode), "allowExecute": sec.AllowExecute,
+			"requireApproval": sec.RequireApproval, "reason": sec.Reason,
+			"scopes": sec.Scopes, "externalAction": external,
+		},
+	})
+
+	k.mu.Lock()
+	if mission := k.missions[id]; mission != nil {
+		mission.ProviderID = decision.ProviderID
+		mission.RuntimeID = decision.RuntimeID
+		mission.ModelID = decision.ModelID
+		mission.RouteReason = decision.Reason
+		mission.Mode = mode
+		mission.SecurityNote = sec.Reason
+	}
+	goal := ""
+	if mission := k.missions[id]; mission != nil {
+		goal = mission.Goal
+	}
+	k.mu.Unlock()
+
+	// Assist + external → await approval (no execute)
+	if sec.RequireApproval {
+		k.mu.Lock()
+		if mission := k.missions[id]; mission != nil {
+			mission.State = host.StateAwaitingApproval
+			mission.Output = sec.Reason
+			mission.UpdatedAt = time.Now().UTC()
+		}
+		k.mu.Unlock()
+		_ = k.bus.Publish(ctx, eventbus.Event{
+			Type: "mission.updated", MissionID: id,
+			Data: map[string]any{"state": string(host.StateAwaitingApproval), "reason": sec.Reason},
+		})
+		return nil
+	}
+
+	// Observe → route + security journal only
+	if !sec.AllowExecute {
+		out := sec.Reason
+		k.mu.Lock()
+		if mission := k.missions[id]; mission != nil {
+			mission.State = host.StateSucceeded
+			mission.Output = out
+			mission.UpdatedAt = time.Now().UTC()
+		}
+		k.mu.Unlock()
+		_ = k.bus.Publish(ctx, eventbus.Event{
+			Type: "mission.updated", MissionID: id,
+			Data: map[string]any{"state": string(host.StateSucceeded), "output": out, "mode": string(mode)},
+		})
+		return nil
+	}
+
+	if !security.ScopeAllows(sec.Scopes, "runtime:execute") && mode == types.ModeFull {
+		// Full always has runtime:execute in default scopes; keep guard for custom modes.
+	}
+
+	// Credential handle only (INV-07)
 	handle, err := k.creds.Put(ctx, string(decision.ProviderID), "mission", decision.ProviderID, "hermes-demo-token")
 	if err != nil {
 		return err
@@ -268,41 +377,15 @@ func (k *Kernel) executeMission(
 		Data: map[string]any{"handle": string(handle), "scope": string(decision.ProviderID)},
 	})
 
-	// Shared memory read (INV-06)
 	memHits, _ := k.memory.Search(ctx, memorystore.Query{MissionID: id, Limit: 20})
-	// Also include recent platform semantic memory
 	global, _ := k.memory.Search(ctx, memorystore.Query{Kind: memorystore.KindSemantic, Limit: 5})
 	memHits = append(memHits, global...)
 
-	var rt runtime.Runtime
-	for _, rtx := range runtimes {
-		if rtx.ID() == decision.RuntimeID {
-			rt = rtx
-			break
-		}
-	}
-	if rt == nil {
-		return fmt.Errorf("runtime %s not found", decision.RuntimeID)
-	}
-
-	// Re-wire completer (instance may be shared)
 	k.wireCompleter(rt)
-
-	k.mu.Lock()
-	mission := k.missions[id]
-	goal := ""
-	if mission != nil {
-		goal = mission.Goal
-		mission.ProviderID = decision.ProviderID
-		mission.RuntimeID = decision.RuntimeID
-		mission.ModelID = decision.ModelID
-		mission.RouteReason = decision.Reason
-	}
-	k.mu.Unlock()
 
 	env := runtime.ContextEnvelope{
 		Mission: map[string]any{
-			"id": string(id), "goal": goal,
+			"id": string(id), "goal": goal, "mode": string(mode),
 			"requiredCapabilities": capsStrings(req),
 		},
 		Workspace: map[string]any{"profile": "host-neutral"},
@@ -311,9 +394,11 @@ func (k *Kernel) executeMission(
 			{"handle": string(handle), "scope": string(decision.ProviderID)},
 		},
 		Tools:  []map[string]any{{"id": "echo", "name": "echo"}},
-		Budget: map[string]any{"maxSteps": 10},
+		Budget: map[string]any{"maxSteps": k.policy.MaxSteps, "maxCostUsd": k.policy.MaxCostUSD},
 		Security: map[string]any{
-			"sandbox": "process-pty",
+			"sandbox": rtDesc.SandboxTier,
+			"mode":    string(mode),
+			"scopes":  sec.Scopes,
 		},
 		Prompt: goal,
 		Correlation: map[string]string{
@@ -326,15 +411,20 @@ func (k *Kernel) executeMission(
 
 	_ = k.bus.Publish(ctx, eventbus.Event{
 		Type: "runtime.started", MissionID: id,
-		Data: map[string]any{"runtimeId": string(decision.RuntimeID)},
+		Data: map[string]any{"runtimeId": string(decision.RuntimeID), "sandbox": rtDesc.SandboxTier},
 	})
 
 	result, err := rt.Execute(ctx, env)
 	if err != nil {
 		return err
 	}
+	if err := k.policy.CheckSteps(result.StepsUsed); err != nil {
+		return err
+	}
+	if err := k.policy.CheckBudget(result.CostUSD); err != nil {
+		return err
+	}
 
-	// Write episodic memory (shared, trust-labeled)
 	_, _ = k.memory.Write(ctx, memorystore.Entry{
 		Kind:      memorystore.KindEpisodic,
 		MissionID: id,

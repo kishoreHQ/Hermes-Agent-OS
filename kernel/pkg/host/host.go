@@ -39,6 +39,7 @@ type Mission struct {
 	Name         string             `json:"name,omitempty"`
 	Goal         string             `json:"goal"`
 	State        MissionState       `json:"state"`
+	Mode         types.AgentMode    `json:"mode,omitempty"`
 	RequiredCaps []types.Capability `json:"requiredCapabilities"`
 	Labels       map[string]string  `json:"labels,omitempty"`
 	CostUSD      float64            `json:"costUsd,omitempty"`
@@ -47,6 +48,7 @@ type Mission struct {
 	RuntimeID    types.PluginID     `json:"runtimeId,omitempty"`
 	ModelID      string             `json:"modelId,omitempty"`
 	RouteReason  string             `json:"routeReason,omitempty"`
+	SecurityNote string             `json:"securityNote,omitempty"`
 	CreatedAt    time.Time          `json:"createdAt"`
 	UpdatedAt    time.Time          `json:"updatedAt"`
 	CancelReason string             `json:"cancelReason,omitempty"`

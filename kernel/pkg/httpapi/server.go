@@ -16,7 +16,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
-const Version = "hermesd-host/0.4.0"
+const Version = "hermesd-host/0.5.0"
 
 // Server is the Host HTTP surface.
 type Server struct {
@@ -39,6 +39,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/plugins", s.apiPlugins)
 	mux.HandleFunc("/api/v1/memory/search", s.apiMemorySearch)
 	mux.HandleFunc("/api/v1/credentials", s.apiCredentials)
+	mux.HandleFunc("/api/v1/security/posture", s.apiSecurityPosture)
+	mux.HandleFunc("/api/v1/policies", s.apiPolicies)
 
 	// Mission Control SPA when mission-control/dist exists (H3 / GAP-UI-002 parity)
 	if dist := uiDistPath(); dist != "" {
@@ -89,12 +91,15 @@ func (s *Server) apiHealth(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "unhealthy", err.Error(), "Restart hermesd.")
 		return
 	}
+	pol := s.k.Policy()
 	writeOK(w, map[string]any{
 		"status":  "ok",
 		"profile": "host-neutral",
 		"version": Version,
 		"product": "Hermes-Agent-OS",
 		"seq":     s.k.Bus().Seq(),
+		"policyId": pol.ID,
+		"modes":    []string{"full", "assist", "observe"},
 	})
 }
 
@@ -114,9 +119,10 @@ func (s *Server) apiMissions(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		body, _ := io.ReadAll(r.Body)
 		var req struct {
-			Name                 string   `json:"name"`
-			Goal                 string   `json:"goal"`
-			RequiredCapabilities []string `json:"requiredCapabilities"`
+			Name                 string            `json:"name"`
+			Goal                 string            `json:"goal"`
+			Mode                 string            `json:"mode"`
+			RequiredCapabilities []string          `json:"requiredCapabilities"`
 			Labels               map[string]string `json:"labels"`
 		}
 		if err := json.Unmarshal(body, &req); err != nil && len(body) > 0 {
@@ -139,10 +145,19 @@ func (s *Server) apiMissions(w http.ResponseWriter, r *http.Request) {
 		for _, c := range req.RequiredCapabilities {
 			caps = append(caps, types.Capability(c))
 		}
+		labels := req.Labels
+		if req.Mode != "" {
+			if labels == nil {
+				labels = map[string]string{}
+			}
+			if labels["security.mode"] == "" {
+				labels["security.mode"] = req.Mode
+			}
+		}
 		id, err := s.k.SubmitMission(r.Context(), host.Mission{
-			Name: req.Name, Goal: req.Goal, RequiredCaps: caps, Labels: req.Labels,
+			Name: req.Name, Goal: req.Goal, RequiredCaps: caps, Labels: labels,
+			Mode: types.AgentMode(req.Mode),
 		})
-		// Labels may include route.preferProvider / route.preferRuntime / route.exclude* for H4 soft steering.
 		if err != nil {
 			writeErr(w, 400, "submit_failed", err.Error(), "Fix capabilities or goal.")
 			return
@@ -268,6 +283,38 @@ func (s *Server) apiReplay(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) apiSecurityPosture(w http.ResponseWriter, r *http.Request) {
+	pol := s.k.Policy()
+	writeOK(w, map[string]any{
+		"modes": []map[string]any{
+			{"id": "full", "description": "Autonomous execution within policy budgets"},
+			{"id": "assist", "description": "External actions require human approval"},
+			{"id": "observe", "description": "Route and journal only; no runtime execute"},
+		},
+		"credentialBroker": "handles-only",
+		"pluginSigning": map[string]any{
+			"hmac":            "HERMES_PLUGIN_HMAC_KEY",
+			"requireSigned":   "HERMES_REQUIRE_SIGNED_PLUGINS",
+			"label":           "hermes.signature",
+		},
+		"policy": map[string]any{
+			"id": pol.ID, "defaultMode": pol.DefaultMode,
+			"maxSteps": pol.MaxSteps, "maxCostUsd": pol.MaxCostUSD,
+			"minSandboxTier": pol.MinSandboxTier,
+		},
+		"sandboxTiers": []string{"process-pty", "container", "micro-vm"},
+	})
+}
+
+func (s *Server) apiPolicies(w http.ResponseWriter, r *http.Request) {
+	pol := s.k.Policy()
+	writeOK(w, []map[string]any{{
+		"id": pol.ID, "defaultMode": string(pol.DefaultMode),
+		"maxSteps": pol.MaxSteps, "maxCostUsd": pol.MaxCostUSD,
+		"minSandboxTier": pol.MinSandboxTier, "preferLocal": pol.PreferLocal,
+	}})
+}
+
 func (s *Server) apiMemorySearch(w http.ResponseWriter, r *http.Request) {
 	q := memorystore.Query{
 		Text:      r.URL.Query().Get("q"),
@@ -317,6 +364,7 @@ func missionJSON(m host.Mission) map[string]any {
 		"name":                 name,
 		"goal":                 m.Goal,
 		"state":                string(m.State),
+		"mode":                 string(m.Mode),
 		"requiredCapabilities": caps,
 		"labels":               m.Labels,
 		"costUsd":              m.CostUSD,
@@ -325,6 +373,7 @@ func missionJSON(m host.Mission) map[string]any {
 		"runtimeId":            string(m.RuntimeID),
 		"modelId":              m.ModelID,
 		"routeReason":          m.RouteReason,
+		"securityNote":         m.SecurityNote,
 		"createdAt":            m.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt":            m.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		"cancelReason":         m.CancelReason,

@@ -70,10 +70,12 @@
 
 ### Phase H5 — Production hardening
 
-- Security review (modes, scopes, sandbox tiers, signed manifests)  
-- Performance baselines  
-- Evaluation harness  
-- Multi-repo extract decision (ADR amend if splitting)  
+- [x] Security: modes full/assist/observe, scopes, sandbox policy, HMAC plugin signatures  
+- [x] Host: `/api/v1/security/posture`, `/api/v1/policies`, mission `mode`  
+- [x] Performance baselines + `go test -bench`  
+- [x] Evaluation harness (golden suite)  
+- [x] Multi-repo: **retain monorepo** (ADR-0010)  
+- [x] `make prove-h5` / `hermesd prove-h5`  
 
 ---
 

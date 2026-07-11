@@ -9,7 +9,7 @@ Product acceptance gates for Hermes-Agent-OS.
 | H2 | Plugin load + execute path (`make smoke`) | **PASS** |
 | H3 | Mission Control against Hermes Host API | **PASS** (core host surfaces) |
 | H4 | Interchangeability proof (`make prove-h4`) | **PASS** |
-| H5 | Security + production readiness | Pending |
+| H5 | Production hardening (`make prove-h5`) | **PASS** |
 
 **H1 demo checklist**
 
@@ -42,5 +42,13 @@ Product acceptance gates for Hermes-Agent-OS.
 3. Excluding free-local routes to budget **without** kernel code change  
 4. Preferring `runtime.example.steps` changes harness, not provider  
 5. Kernel source not modified between matrix cases — labels only  
+
+**H5 demo checklist**
+
+1. `make prove-h5` PASS (H4 + eval + perf + security invariants)  
+2. `POST` mission with `"mode":"observe"` → succeeded without runtime side effects  
+3. Assist + `security.externalAction=true` → `awaiting_approval`  
+4. `GET /api/v1/security/posture` documents modes, scopes, signing env  
+5. Credentials API still returns handles only  
 
 AESP-RI GATE-1…9 remain authoritative for the reference monorepo until Hermes owns those demos.

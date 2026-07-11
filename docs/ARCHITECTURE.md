@@ -74,10 +74,17 @@ kernel/
     credentials/        # unified credential broker (INV-07)
     memorystore/        # unified memory (INV-06)
     eventbus/           # monotonic seq journal (INV-10)
+    security/           # modes, scopes, sandbox, HMAC signing (H5)
+    policy/             # budgets, min sandbox, default mode
+    evaluation/         # golden mission suite
+    perf/               # latency baselines + benchmarks
+    hardening/          # H5 composite prove
+    interchange/        # H4 matrix prove
     httpapi/            # /api/v1 Host HTTP + WS
     adapters/echo/      # example provider + runtime (no vendor)
+    adapters/steps/     # multi-step example runtime
     bootstrap/          # factory registration + disk load
-    kernel/             # Kernel: route → execute → memory
+    kernel/             # Kernel: security → route → execute → memory
 ```
 
 **Invariant:** no vendor package imports in `pkg/kernel`, `pkg/router`, `pkg/capability`, `pkg/host`.

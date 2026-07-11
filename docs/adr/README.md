@@ -11,6 +11,8 @@
 | [0007](./0007-plugin-runtime-h2.md) | Plugin runtime (disk loader + factories) | Accepted |
 | [0008](./0008-mission-control-host.md) | Mission Control as a Hermes host | Accepted |
 | [0009](./0009-interchangeability.md) | Interchangeability of providers and runtimes | Accepted |
+| [0010](./0010-monorepo-retention.md) | Retain product monorepo through H5 | Accepted |
+| [0011](./0011-security-modes.md) | Agent modes, scopes, sandbox, signed plugins | Accepted |
 
 Process: propose → challenge (reviewer personas) → accept/reject → implement.  
 Superseding an ADR requires a new ADR that links the old one.
