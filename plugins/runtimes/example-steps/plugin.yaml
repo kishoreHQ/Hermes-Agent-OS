@@ -1,0 +1,17 @@
+apiVersion: hermes.plugin/v1
+kind: runtime
+metadata:
+  id: runtime.example.steps
+  version: 0.0.1
+  name: Example Steps Runtime
+spec:
+  sandboxTier: container
+  capabilitiesIn:
+    - coding
+    - tools
+  capabilitiesOut:
+    - artifacts
+    - plan
+labels:
+  hermes.driver: steps-runtime
+  hermes.example: "true"

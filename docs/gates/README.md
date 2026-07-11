@@ -8,7 +8,7 @@ Product acceptance gates for Hermes-Agent-OS.
 | H1 | Host API parity smoke (`make smoke`) | **PASS** (core Host surface) |
 | H2 | Plugin load + execute path (`make smoke`) | **PASS** |
 | H3 | Mission Control against Hermes Host API | **PASS** (core host surfaces) |
-| H4 | Interchangeability proof (≥2 providers, ≥2 runtimes) | Pending |
+| H4 | Interchangeability proof (`make prove-h4`) | **PASS** |
 | H5 | Security + production readiness | Pending |
 
 **H1 demo checklist**
@@ -34,5 +34,13 @@ Product acceptance gates for Hermes-Agent-OS.
 3. Launch mission from UI → state succeeded, provider/runtime visible  
 4. Fleet shows plugins; Memory / Events / Credentials pages populate  
 5. UI source contains **zero** vendor SDK imports  
+
+**H4 demo checklist**
+
+1. `make prove-h4` prints 4× PASS (2 providers × 2 runtimes)  
+2. `route.decided` events include `required` capabilities and non-empty `reason`  
+3. Excluding free-local routes to budget **without** kernel code change  
+4. Preferring `runtime.example.steps` changes harness, not provider  
+5. Kernel source not modified between matrix cases — labels only  
 
 AESP-RI GATE-1…9 remain authoritative for the reference monorepo until Hermes owns those demos.

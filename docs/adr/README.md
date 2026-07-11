@@ -10,6 +10,7 @@
 | [0006](./0006-host-api-surface.md) | Host API surface (`/api/v1`) | Accepted |
 | [0007](./0007-plugin-runtime-h2.md) | Plugin runtime (disk loader + factories) | Accepted |
 | [0008](./0008-mission-control-host.md) | Mission Control as a Hermes host | Accepted |
+| [0009](./0009-interchangeability.md) | Interchangeability of providers and runtimes | Accepted |
 
 Process: propose → challenge (reviewer personas) → accept/reject → implement.  
 Superseding an ADR requires a new ADR that links the old one.

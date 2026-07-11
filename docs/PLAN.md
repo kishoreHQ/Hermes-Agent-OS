@@ -62,9 +62,11 @@
 
 ### Phase H4 — Interchangeability proof
 
-- ≥2 provider plugins, ≥2 runtime plugins  
-- Same mission succeeds under swap without kernel edit  
-- Replay shows capability path, not vendor strings as primary key  
+- [x] ≥2 provider plugins (echo free-local + budget)  
+- [x] ≥2 runtime plugins (echo single-step + steps multi-step)  
+- [x] Same mission succeeds under 2×2 swap via labels only (no kernel edit)  
+- [x] Replay includes `route.decided` with capabilities + reason  
+- [x] `make prove-h4` / `hermesd prove-h4` automated gate  
 
 ### Phase H5 — Production hardening
 

@@ -16,7 +16,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
-const Version = "hermesd-host/0.3.0"
+const Version = "hermesd-host/0.4.0"
 
 // Server is the Host HTTP surface.
 type Server struct {
@@ -142,6 +142,7 @@ func (s *Server) apiMissions(w http.ResponseWriter, r *http.Request) {
 		id, err := s.k.SubmitMission(r.Context(), host.Mission{
 			Name: req.Name, Goal: req.Goal, RequiredCaps: caps, Labels: req.Labels,
 		})
+		// Labels may include route.preferProvider / route.preferRuntime / route.exclude* for H4 soft steering.
 		if err != nil {
 			writeErr(w, 400, "submit_failed", err.Error(), "Fix capabilities or goal.")
 			return

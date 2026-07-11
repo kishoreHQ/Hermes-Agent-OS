@@ -1,10 +1,11 @@
-// Package bootstrap wires default factories and loads plugins from disk (H2).
+// Package bootstrap wires default factories and loads plugins from disk.
 package bootstrap
 
 import (
 	"fmt"
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/echo"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/steps"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/credentials"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/kernel"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
@@ -19,14 +20,15 @@ func memoryFactory(m plugin.Manifest) (any, error) {
 // DefaultFactories registers in-tree drivers (vendor-neutral examples only).
 func DefaultFactories() *plugin.FactoryRegistry {
 	f := plugin.NewFactoryRegistry()
-	// Drivers referenced by plugin.yaml labels.hermes.driver
 	f.Register("echo-provider", echo.ProviderFactory)
 	f.Register("echo-runtime", echo.RuntimeFactory)
+	f.Register("steps-runtime", steps.RuntimeFactory)
 	f.Register("memory-ephemeral", memoryFactory)
 	// Id aliases
 	f.Register("provider.example.echo", echo.ProviderFactory)
 	f.Register("runtime.example.echo", echo.RuntimeFactory)
 	f.Register("provider.example.budget", echo.ProviderFactory)
+	f.Register("runtime.example.steps", steps.RuntimeFactory)
 	f.Register("memory.example.ephemeral", memoryFactory)
 	return f
 }
@@ -128,6 +130,17 @@ func seedBuiltins(reg plugin.Registry, f *plugin.FactoryRegistry) error {
 				"capabilitiesOut": []any{"artifacts"},
 			},
 			Labels: map[string]string{"hermes.driver": "echo-runtime", "hermes.example": "true"},
+		},
+		{
+			APIVersion: "hermes.plugin/v1",
+			Kind:       plugin.KindRuntime,
+			Metadata:   plugin.Metadata{ID: "runtime.example.steps", Version: "0.0.1", Name: "Example Steps Runtime"},
+			Spec: map[string]any{
+				"sandboxTier":     "container",
+				"capabilitiesIn":  []any{"coding", "tools"},
+				"capabilitiesOut": []any{"artifacts", "plan"},
+			},
+			Labels: map[string]string{"hermes.driver": "steps-runtime", "hermes.example": "true"},
 		},
 		{
 			APIVersion: "hermes.plugin/v1",

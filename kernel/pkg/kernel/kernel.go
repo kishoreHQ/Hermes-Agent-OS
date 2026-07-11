@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/echo"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/steps"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/capability"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/credentials"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/eventbus"
@@ -113,12 +114,19 @@ func (k *Kernel) refreshAdaptersLocked() {
 			continue
 		}
 		if rt, ok := inst.(runtime.Runtime); ok {
-			// Wire Completer for echo runtimes so they use the routed provider
-			if er, ok := rt.(*echo.Runtime); ok {
-				er.Complete = k.completeViaRoutedProvider
-			}
+			// Wire Completer so runtimes use the routed provider (never own vendors)
+			k.wireCompleter(rt)
 			k.runtimes = append(k.runtimes, rt)
 		}
+	}
+}
+
+func (k *Kernel) wireCompleter(rt runtime.Runtime) {
+	switch r := rt.(type) {
+	case *echo.Runtime:
+		r.Complete = k.completeViaRoutedProvider
+	case *steps.Runtime:
+		r.Complete = k.completeViaRoutedProvider
 	}
 }
 
@@ -185,8 +193,8 @@ func (k *Kernel) SubmitMission(ctx context.Context, m host.Mission) (types.Missi
 		},
 	})
 
-	// Execute synchronously for H2 (async worker pool later)
-	if err := k.executeMission(ctx, m.ID, req, providers, runtimes); err != nil {
+	// Execute synchronously (async worker pool later)
+	if err := k.executeMission(ctx, m.ID, req, m.Labels, providers, runtimes); err != nil {
 		k.setMissionFailed(ctx, m.ID, err)
 		// Still return id — host can inspect failed state
 		return m.ID, nil
@@ -194,15 +202,43 @@ func (k *Kernel) SubmitMission(ctx context.Context, m host.Mission) (types.Missi
 	return m.ID, nil
 }
 
+func routeOptionsFromLabels(labels map[string]string) router.Options {
+	opts := router.Options{PreferLocal: true, PolicyID: "default"}
+	if labels == nil {
+		return opts
+	}
+	if v, ok := labels["route.preferLocal"]; ok && (v == "false" || v == "0") {
+		opts.PreferLocal = false
+	}
+	if v := labels["route.preferProvider"]; v != "" {
+		opts.PreferProvider = types.PluginID(v)
+	}
+	if v := labels["route.preferRuntime"]; v != "" {
+		opts.PreferRuntime = types.PluginID(v)
+	}
+	if v := labels["route.excludeProvider"]; v != "" {
+		opts.ExcludeProvider = map[types.PluginID]bool{types.PluginID(v): true}
+	}
+	if v := labels["route.excludeRuntime"]; v != "" {
+		opts.ExcludeRuntime = map[types.PluginID]bool{types.PluginID(v): true}
+	}
+	if v := labels["route.policyId"]; v != "" {
+		opts.PolicyID = v
+	}
+	return opts
+}
+
 func (k *Kernel) executeMission(
 	ctx context.Context,
 	id types.MissionID,
 	req []types.Capability,
+	labels map[string]string,
 	providers []provider.Provider,
 	runtimes []runtime.Runtime,
 ) error {
 	r := router.New(providers, runtimes)
-	decision, err := r.Route(ctx, req, true)
+	opts := routeOptionsFromLabels(labels)
+	decision, err := r.RouteWith(ctx, req, opts)
 	if err != nil {
 		return err
 	}
@@ -210,12 +246,15 @@ func (k *Kernel) executeMission(
 	_ = k.bus.Publish(ctx, eventbus.Event{
 		Type: "route.decided", MissionID: id,
 		Data: map[string]any{
-			"providerId": string(decision.ProviderID),
-			"runtimeId":  string(decision.RuntimeID),
-			"modelId":    decision.ModelID,
-			"costTier":   string(decision.CostTier),
-			"reason":     decision.Reason,
-			"required":   capsStrings(decision.Required),
+			"providerId":          string(decision.ProviderID),
+			"runtimeId":           string(decision.RuntimeID),
+			"modelId":             decision.ModelID,
+			"costTier":            string(decision.CostTier),
+			"reason":              decision.Reason,
+			"required":            capsStrings(decision.Required),
+			"policyId":            decision.PolicyID,
+			"providersConsidered": decision.ProvidersConsidered,
+			"runtimesConsidered":  decision.RuntimesConsidered,
 		},
 	})
 
@@ -246,10 +285,8 @@ func (k *Kernel) executeMission(
 		return fmt.Errorf("runtime %s not found", decision.RuntimeID)
 	}
 
-	// Re-wire completer on echo runtime (instance may be shared)
-	if er, ok := rt.(*echo.Runtime); ok {
-		er.Complete = k.completeViaRoutedProvider
-	}
+	// Re-wire completer (instance may be shared)
+	k.wireCompleter(rt)
 
 	k.mu.Lock()
 	mission := k.missions[id]

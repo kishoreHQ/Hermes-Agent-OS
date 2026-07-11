@@ -11,6 +11,8 @@ import (
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/bootstrap"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/httpapi"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/interchange"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
 )
 
 func main() {
@@ -19,6 +21,7 @@ func main() {
 		fmt.Println("usage: hermesd <command>")
 		fmt.Println("  status              print platform status")
 		fmt.Println("  serve [addr]        Host API (default :8080)")
+		fmt.Println("  prove-h4            interchangeability proof (H4)")
 		os.Exit(0)
 	}
 	switch os.Args[1] {
@@ -30,6 +33,11 @@ func main() {
 			addr = os.Args[2]
 		}
 		if err := runServe(addr); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	case "prove-h4":
+		if err := runProveH4(); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -58,14 +66,31 @@ func runStatus() {
 		os.Exit(1)
 	}
 	printBanner()
-	fmt.Println("status: H3 Mission Control host")
+	fmt.Println("status: H4 interchangeability")
 	fmt.Println("plugins registered:", len(res.Registry.List("")))
+	fmt.Printf("  providers: %d  runtimes: %d\n",
+		len(res.Registry.List(plugin.KindProvider)),
+		len(res.Registry.List(plugin.KindRuntime)))
 	fmt.Println("loaded from disk/seed:", res.Loaded)
 	if res.LoadWarnings != "" {
 		fmt.Println("load notes:", res.LoadWarnings)
 	}
 	fmt.Println("endpoints: /api/v1/health /api/v1/missions /api/v1/events")
 	fmt.Println("           /api/v1/registry/* /api/v1/memory/search /api/v1/credentials")
+	fmt.Println("proof: hermesd prove-h4")
+}
+
+func runProveH4() error {
+	printBanner()
+	rep, err := interchange.Run(context.Background())
+	if err != nil {
+		return err
+	}
+	fmt.Print(interchange.Format(rep))
+	if rep.Failed > 0 || rep.Passed == 0 {
+		return fmt.Errorf("H4 proof failed")
+	}
+	return nil
 }
 
 func runServe(addr string) error {
@@ -83,7 +108,7 @@ func runServe(addr string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	printBanner()
-	fmt.Printf("serving Host API on %s (H3)\n", addr)
+	fmt.Printf("serving Host API on %s (H4)\n", addr)
 	fmt.Printf("  plugins: %d (disk/seed loaded=%d)\n", len(k.Plugins().List("")), res.Loaded)
 	if res.LoadWarnings != "" {
 		fmt.Printf("  load notes: %s\n", res.LoadWarnings)

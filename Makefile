@@ -1,4 +1,4 @@
-.PHONY: test build run serve status clean fmt vet lint help smoke ui-install ui-build ui-dev ui-typecheck dev
+.PHONY: test build run serve status clean fmt vet lint help smoke prove-h4 ui-install ui-build ui-dev ui-typecheck dev
 
 KERNEL_DIR := kernel
 UI_DIR := mission-control
@@ -55,6 +55,9 @@ smoke: build ## HTTP smoke against a temporary server
 	  curl -sf 'http://127.0.0.1:18080/api/v1/credentials' | grep -q 'cred_'; \
 	  kill $$pid 2>/dev/null; wait $$pid 2>/dev/null; \
 	  echo "smoke ok"
+
+prove-h4: build ## H4 interchangeability proof (2×2 provider×runtime)
+	./$(HERMESD) prove-h4
 
 fmt: ## go fmt
 	cd $(KERNEL_DIR) && go fmt ./...

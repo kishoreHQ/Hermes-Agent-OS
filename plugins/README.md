@@ -26,7 +26,22 @@ Each plugin ships:
 | `providers/example-echo` | `echo-provider` | free-local inference |
 | `providers/example-budget` | `echo-provider` | budget-tier inference (routing demo) |
 | `runtimes/example-echo` | `echo-runtime` | one-step harness via Completer |
+| `runtimes/example-steps` | `steps-runtime` | multi-step harness (H4 second runtime) |
 | `memory/ephemeral` | `memory-ephemeral` | discovery marker; kernel owns store |
+
+### Soft routing labels (H4)
+
+Missions may set labels (not capabilities) to steer among *capable* plugins:
+
+| Label | Effect |
+|-------|--------|
+| `route.preferLocal` | `true`/`false` — prefer local providers first |
+| `route.preferProvider` | soft prefer plugin id |
+| `route.preferRuntime` | soft prefer runtime id |
+| `route.excludeProvider` | exclude plugin id |
+| `route.excludeRuntime` | exclude runtime id |
+
+Primary key remains **requiredCapabilities**.
 
 Env: `HERMES_PLUGINS` may point at additional roots (`:`-separated).
 

@@ -58,8 +58,9 @@ make ui-dev         # :5173, proxies /api → kernel
 make ui-install && make ui-build
 make serve          # open http://127.0.0.1:8080
 
-# Smoke
+# Smoke + H4 interchangeability proof
 make smoke
+make prove-h4
 ```
 
 ```bash
@@ -106,7 +107,8 @@ scripts/             # Dev helpers
 | **H1** Host API `/api/v1` + events | Done |
 | **H2** Plugin loader + execute path | Done |
 | **H3** Mission Control re-home | Done (core host surfaces) |
-| **H4** Interchangeability proof | Next |
+| **H4** Interchangeability proof | Done (`make prove-h4`) |
+| **H5** Production hardening | Next |
 
 Working Agent OS + Mission Control prototypes currently also live in AESP-Reference-Implementation until Hermes reaches full product parity (deliberate migration, not abandonment).
 
