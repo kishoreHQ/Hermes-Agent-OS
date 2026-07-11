@@ -1,14 +1,16 @@
 // Package memorystore is Hermes unified memory (INV-06).
-// All runtimes read/write through this surface — never vendor memory silos.
+// Hybrid keyword + bag-of-words cosine ranking (pure Go embeddings).
 package memorystore
 
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/embeddings"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
@@ -25,14 +27,16 @@ const (
 
 // Entry is a single memory record with trust and provenance.
 type Entry struct {
-	ID         string              `json:"id"`
-	Kind       Kind                `json:"kind"`
-	MissionID  types.MissionID     `json:"missionId,omitempty"`
-	Content    string              `json:"content"`
-	Trust      types.TrustLabel    `json:"trust"`
-	Provenance map[string]string   `json:"provenance,omitempty"`
-	Labels     map[string]string   `json:"labels,omitempty"`
-	CreatedAt  time.Time           `json:"createdAt"`
+	ID         string            `json:"id"`
+	Kind       Kind              `json:"kind"`
+	MissionID  types.MissionID   `json:"missionId,omitempty"`
+	Content    string            `json:"content"`
+	Trust      types.TrustLabel  `json:"trust"`
+	Provenance map[string]string `json:"provenance,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	CreatedAt  time.Time         `json:"createdAt"`
+	// Score is set on search results (hybrid).
+	Score float64 `json:"score,omitempty"`
 }
 
 // Query filters memory search.
@@ -50,15 +54,16 @@ type Store interface {
 	Get(ctx context.Context, id string) (Entry, error)
 }
 
-// MemoryStore is an in-process store (dev/test).
+// MemoryStore is an in-process store (dev/test + hybrid search).
 type MemoryStore struct {
 	mu   sync.Mutex
 	byID map[string]Entry
+	vec  map[string]embeddings.Vec
 	seq  int64
 }
 
 func New() *MemoryStore {
-	return &MemoryStore{byID: map[string]Entry{}}
+	return &MemoryStore{byID: map[string]Entry{}, vec: map[string]embeddings.Vec{}}
 }
 
 func (s *MemoryStore) Write(ctx context.Context, e Entry) (Entry, error) {
@@ -79,6 +84,7 @@ func (s *MemoryStore) Write(ctx context.Context, e Entry) (Entry, error) {
 	}
 	e.CreatedAt = time.Now().UTC()
 	s.byID[e.ID] = e
+	s.vec[e.ID] = embeddings.Embed(e.Content)
 	return e, nil
 }
 
@@ -89,21 +95,45 @@ func (s *MemoryStore) Search(ctx context.Context, q Query) ([]Entry, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	var out []Entry
-	for _, e := range s.byID {
+	qVec := embeddings.Embed(q.Text)
+	type scored struct {
+		e Entry
+		s float64
+	}
+	var hits []scored
+	for id, e := range s.byID {
 		if q.MissionID != "" && e.MissionID != q.MissionID {
 			continue
 		}
 		if q.Kind != "" && e.Kind != q.Kind {
 			continue
 		}
-		if q.Text != "" && !strings.Contains(strings.ToLower(e.Content), strings.ToLower(q.Text)) {
+		score := 0.0
+		if q.Text == "" {
+			score = 1
+		} else {
+			// keyword boost
+			if strings.Contains(strings.ToLower(e.Content), strings.ToLower(q.Text)) {
+				score += 0.5
+			}
+			// cosine
+			if v, ok := s.vec[id]; ok {
+				score += embeddings.Cosine(qVec, v)
+			}
+		}
+		if q.Text != "" && score <= 0 {
 			continue
 		}
-		out = append(out, e)
-		if len(out) >= limit {
+		e.Score = score
+		hits = append(hits, scored{e: e, s: score})
+	}
+	sort.Slice(hits, func(i, j int) bool { return hits[i].s > hits[j].s })
+	out := make([]Entry, 0, limit)
+	for i, h := range hits {
+		if i >= limit {
 			break
 		}
+		out = append(out, h.e)
 	}
 	return out, nil
 }
@@ -125,7 +155,7 @@ func AsMaps(entries []Entry) []map[string]any {
 		out = append(out, map[string]any{
 			"id": e.ID, "kind": string(e.Kind), "content": e.Content,
 			"trust": string(e.Trust), "missionId": string(e.MissionID),
-			"provenance": e.Provenance, "labels": e.Labels,
+			"provenance": e.Provenance, "labels": e.Labels, "score": e.Score,
 		})
 	}
 	return out

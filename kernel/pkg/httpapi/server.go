@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/kernel"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/ratelimit"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
@@ -46,14 +48,16 @@ func (s *Server) Handler() http.Handler {
 	s.registerPlatformRoutes(mux)
 	s.registerProviderMgmtRoutes(mux)
 	s.registerAgentOSRoutes(mux)
+	s.registerWorkspaceRoutes(mux)
 
 	// Mission Control SPA when mission-control/dist exists (H3 / GAP-UI-002 parity)
 	if dist := uiDistPath(); dist != "" {
 		mux.Handle("/", spaFileServer(dist))
 	}
 
-	// Auth (optional) → CORS
-	return withCORS(withAuth(mux))
+	// Rate limit → Auth (optional) → CORS
+	lim := ratelimit.New(envInt("HERMES_RATE_LIMIT_PER_MIN", 300))
+	return withCORS(withAuth(lim.Middleware(mux)))
 }
 
 // ——— envelope ———
@@ -70,6 +74,18 @@ func writeErr(w http.ResponseWriter, status int, code, msg, remediation string) 
 	writeEnv(w, status, nil, map[string]any{
 		"code": code, "message": msg, "remediation": remediation,
 	})
+}
+
+func envInt(k string, def int) int {
+	v := strings.TrimSpace(os.Getenv(k))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return def
+	}
+	return n
 }
 
 func withCORS(next http.Handler) http.Handler {

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/mcpclient"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/research"
@@ -23,6 +24,7 @@ func (s *Server) registerAgentOSRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/approvals/", s.apiApprovalSub)
 	mux.HandleFunc("/api/v1/jobs", s.apiJobs)
 	mux.HandleFunc("/api/v1/jobs/", s.apiJobSub)
+	mux.HandleFunc("/api/v1/stream/events", s.apiStreamEvents)
 }
 
 // —— Chat ——
@@ -254,6 +256,48 @@ func (s *Server) apiJobs(w http.ResponseWriter, r *http.Request) {
 		writeOK(w, s.k.Scheduler.Upsert(j))
 	default:
 		writeErr(w, 405, "method", "GET or POST", "")
+	}
+}
+
+// apiStreamEvents is SSE of the event bus (Odysseus-style live progress).
+func (s *Server) apiStreamEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeErr(w, 500, "no_flush", "streaming unsupported", "")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	filter := r.URL.Query().Get("mission")
+	ch, err := s.k.Bus().Subscribe(r.Context(), filter)
+	if err != nil {
+		writeErr(w, 500, "subscribe_failed", err.Error(), "")
+		return
+	}
+	// catch-up
+	if since := r.URL.Query().Get("since"); since != "" {
+		// best-effort: full since via EventsSince not needed here
+	}
+	tick := time.NewTicker(15 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-tick.C:
+			_, _ = w.Write([]byte(": ping\n\n"))
+			flusher.Flush()
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			b, _ := json.Marshal(ev)
+			_, _ = w.Write([]byte("data: "))
+			_, _ = w.Write(b)
+			_, _ = w.Write([]byte("\n\n"))
+			flusher.Flush()
+		}
 	}
 }
 

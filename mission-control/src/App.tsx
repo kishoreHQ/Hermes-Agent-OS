@@ -18,6 +18,12 @@ import { ChatPage } from '@/pages/ChatPage'
 import { MCPPage } from '@/pages/MCPPage'
 import { SkillsPage } from '@/pages/SkillsPage'
 import { ResearchPage } from '@/pages/ResearchPage'
+import { NotesPage } from '@/pages/NotesPage'
+import { TodosPage } from '@/pages/TodosPage'
+import { DocumentsPage } from '@/pages/DocumentsPage'
+import { ComparePage } from '@/pages/ComparePage'
+import { JobsPage } from '@/pages/JobsPage'
+import { ApprovalsPage } from '@/pages/ApprovalsPage'
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -42,10 +48,16 @@ export default function App() {
             <Route path="board" element={<BoardPage />} />
             <Route path="routines" element={<RoutinesPage />} />
             <Route path="chat" element={<ChatPage />} />
+            <Route path="research" element={<ResearchPage />} />
+            <Route path="notes" element={<NotesPage />} />
+            <Route path="todos" element={<TodosPage />} />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="compare" element={<ComparePage />} />
+            <Route path="jobs" element={<JobsPage />} />
+            <Route path="approvals" element={<ApprovalsPage />} />
             <Route path="providers" element={<ProvidersPage />} />
             <Route path="mcp" element={<MCPPage />} />
             <Route path="skills" element={<SkillsPage />} />
-            <Route path="research" element={<ResearchPage />} />
             <Route path="fleet" element={<FleetPage />} />
             <Route path="tools" element={<ToolsPage />} />
             <Route path="memory" element={<MemoryPage />} />

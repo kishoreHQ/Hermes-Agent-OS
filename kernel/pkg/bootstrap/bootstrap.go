@@ -133,9 +133,10 @@ func New(opts Options) (*Result, error) {
 	// https://llm.kimchi.dev/openai/v1 — same endpoint Cursor/OpenCode use.
 	ensureKimchiProvider(reg, factories, k)
 
-	// Workspace tools (fs, shell, web, memory, research) + skills dir
+	// Workspace tools (fs, shell, web, memory, notes, docs, research) + skills dir
 	_ = workspacetools.Register(k.Tools(), workspacetools.Options{
 		Memory:     k.Memory(),
+		WS:         k.Workspace,
 		AllowShell: true,
 	})
 	if k.Skills != nil {

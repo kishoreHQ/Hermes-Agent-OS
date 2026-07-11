@@ -1,0 +1,30 @@
+# Hermes Agent OS — local stack (kernel + optional SearXNG)
+services:
+  hermes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - HERMES_WORKSPACE=/workspace
+      - HERMES_DATA_DIR=/data
+      - HERMES_SEARCH_URL=http://searxng:8080
+      - KIMCHI_API_KEY=${KIMCHI_API_KEY:-}
+      - HERMES_API_TOKEN=${HERMES_API_TOKEN:-}
+      - HERMES_RATE_LIMIT_PER_MIN=300
+    volumes:
+      - hermes-data:/data
+      - .:/workspace:ro
+    depends_on:
+      - searxng
+
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "8888:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+
+volumes:
+  hermes-data:

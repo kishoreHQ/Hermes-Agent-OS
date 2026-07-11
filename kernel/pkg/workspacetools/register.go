@@ -16,6 +16,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/toolrouter"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/workspace"
 )
 
 // Options for tool registration.
@@ -24,6 +25,8 @@ type Options struct {
 	Root string
 	// Memory optional store for memory tools.
 	Memory memorystore.Store
+	// Workspace notes/docs/todos/vault.
+	WS *workspace.Store
 	// AllowShell enables shell.exec (default true when Root set).
 	AllowShell bool
 	// SearchURL optional SearXNG or compatible search endpoint.
@@ -351,6 +354,109 @@ func Register(r *toolrouter.Router, opts Options) error {
 		return fmt.Sprintf("HTTP %d\n%s", resp.StatusCode, string(raw)), nil
 	})
 
+	// —— notes / todos / docs / vault ——
+	if opts.WS != nil {
+		ws := opts.WS
+		_ = r.Register(toolrouter.Tool{
+			ID: "notes.list", Name: "notes.list", Description: "List workspace notes",
+			Enabled: true, Labels: map[string]string{"category": "notes"},
+			Parameters: obj(map[string]any{}),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			b, _ := json.Marshal(ws.ListNotes())
+			return string(b), nil
+		})
+		_ = r.Register(toolrouter.Tool{
+			ID: "notes.write", Name: "notes.write", Description: "Create or update a note",
+			Enabled: true, Labels: map[string]string{"category": "notes"},
+			Parameters: obj(map[string]any{
+				"id": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"},
+				"body": map[string]any{"type": "string"},
+			}, "title", "body"),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			n := ws.PutNote(workspace.Note{ID: str(input, "id"), Title: str(input, "title"), Body: str(input, "body")})
+			return n.ID, nil
+		})
+		_ = r.Register(toolrouter.Tool{
+			ID: "notes.search", Name: "notes.search", Description: "Search notes by text",
+			Enabled: true, Labels: map[string]string{"category": "notes"},
+			Parameters: obj(map[string]any{"query": map[string]any{"type": "string"}}, "query"),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			b, _ := json.Marshal(ws.SearchNotes(str(input, "query")))
+			return string(b), nil
+		})
+		_ = r.Register(toolrouter.Tool{
+			ID: "todos.list", Name: "todos.list", Description: "List todos",
+			Enabled: true, Labels: map[string]string{"category": "todos"},
+			Parameters: obj(map[string]any{}),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			b, _ := json.Marshal(ws.ListTodos())
+			return string(b), nil
+		})
+		_ = r.Register(toolrouter.Tool{
+			ID: "todos.write", Name: "todos.write", Description: "Create/update a todo",
+			Enabled: true, Labels: map[string]string{"category": "todos"},
+			Parameters: obj(map[string]any{
+				"id": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"},
+				"done": map[string]any{"type": "boolean"},
+			}, "title"),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			done, _ := input["done"].(bool)
+			t := ws.PutTodo(workspace.Todo{ID: str(input, "id"), Title: str(input, "title"), Done: done})
+			return t.ID, nil
+		})
+		_ = r.Register(toolrouter.Tool{
+			ID: "docs.write", Name: "docs.write", Description: "Create/update a markdown document",
+			Enabled: true, Labels: map[string]string{"category": "docs"},
+			Parameters: obj(map[string]any{
+				"id": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"},
+				"body": map[string]any{"type": "string"},
+			}, "title", "body"),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			d := ws.PutDoc(workspace.Doc{ID: str(input, "id"), Title: str(input, "title"), Body: str(input, "body")})
+			return d.ID, nil
+		})
+		_ = r.Register(toolrouter.Tool{
+			ID: "docs.read", Name: "docs.read", Description: "Read a document by id",
+			Enabled: true, Labels: map[string]string{"category": "docs"},
+			Parameters: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			d, ok := ws.GetDoc(str(input, "id"))
+			if !ok {
+				return "", fmt.Errorf("not found")
+			}
+			return d.Title + "\n\n" + d.Body, nil
+		})
+		_ = r.Register(toolrouter.Tool{
+			ID: "docs.list", Name: "docs.list", Description: "List documents",
+			Enabled: true, Labels: map[string]string{"category": "docs"},
+			Parameters: obj(map[string]any{}),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			b, _ := json.Marshal(ws.ListDocs())
+			return string(b), nil
+		})
+		_ = r.Register(toolrouter.Tool{
+			ID: "vault.put", Name: "vault.put", Description: "Store a vault entry (sensitive content)",
+			Enabled: true, Labels: map[string]string{"category": "vault", "danger": "secret"},
+			Parameters: obj(map[string]any{
+				"name": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"},
+			}, "name", "content"),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			v := ws.PutVault(workspace.VaultEntry{Name: str(input, "name"), Content: str(input, "content")})
+			return v.ID, nil
+		})
+		_ = r.Register(toolrouter.Tool{
+			ID: "vault.get", Name: "vault.get", Description: "Get vault entry content by id",
+			Enabled: true, Labels: map[string]string{"category": "vault"},
+			Parameters: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
+		}, func(ctx context.Context, input map[string]any) (string, error) {
+			v, ok := ws.GetVault(str(input, "id"))
+			if !ok {
+				return "", fmt.Errorf("not found")
+			}
+			return v.Content, nil
+		})
+	}
+
 	return nil
 }
 
@@ -358,10 +464,14 @@ func str(m map[string]any, k string) string {
 	if m == nil {
 		return ""
 	}
-	if v, ok := m[k].(string); ok {
-		return v
+	v, ok := m[k]
+	if !ok || v == nil {
+		return ""
 	}
-	return fmt.Sprintf("%v", m[k])
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 func resolvePath(root, relp string) (string, error) {

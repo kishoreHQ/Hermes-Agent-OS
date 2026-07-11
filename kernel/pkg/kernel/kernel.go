@@ -39,10 +39,12 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/runtime"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/scheduler"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/security"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/contextpack"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/skills"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/toolrouter"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/workflow"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/workspace"
 )
 
 // Kernel is the host-neutral core of Hermes Agent OS.
@@ -81,6 +83,7 @@ type Kernel struct {
 	Chat        *chat.Service
 	Approvals   *approval.Gate
 	Scheduler   *scheduler.Service
+	Workspace   *workspace.Store
 
 	// Live instances collected from registry (refreshed on demand)
 	providers []provider.Provider
@@ -158,6 +161,7 @@ func NewWithOptions(opts Options) *Kernel {
 	k.Chat = chat.New(k)
 	k.Scheduler = scheduler.New(k)
 	k.Scheduler.Start()
+	k.Workspace = workspace.New("")
 	k.refreshAdapters()
 	k.ProviderMgr.SyncFromRegistry()
 	return k
@@ -224,16 +228,33 @@ func (k *Kernel) wireCompleter(rt runtime.Runtime) {
 	case *agentloop.Runtime:
 		r.Complete = k.completeViaRoutedProvider
 		r.Invoke = func(ctx context.Context, toolID string, mission types.MissionID, input map[string]any) (string, error) {
-			// Assist-mode dangerous tools → approval gate (auto-deny if not pre-approved; record request)
+			// Resolve mission mode for HITL
+			mode := types.ModeFull
+			k.mu.Lock()
+			if m := k.missions[mission]; m != nil {
+				mode = m.Mode
+			}
+			k.mu.Unlock()
 			if approval.IsDangerous(toolID) {
-				// Record for operator visibility; still execute in full mode (policy elsewhere)
-				_ = k.Approvals.Request(string(mission), toolID, "dangerous tool", input)
+				req := k.Approvals.Request(string(mission), toolID, "dangerous tool requires approval in assist mode", input)
+				if mode == types.ModeAssist {
+					// Block until approved or deny by default (operator must POST /approvals/{id}/approve)
+					// Non-blocking default: deny until approved (safe).
+					if req.Status != "approved" {
+						return "", fmt.Errorf("tool %s blocked pending approval %s (assist mode)", toolID, req.ID)
+					}
+				}
 			}
 			inv, err := k.tools.Invoke(ctx, toolID, mission, r.ID(), input)
 			if err != nil {
 				return inv.Output, err
 			}
-			return inv.Output, nil
+			// Sanitize untrusted web/tool outputs slightly for next model turn
+			out := inv.Output
+			if toolID == "web.fetch" || toolID == "web.search" {
+				out = contextpack.Sanitize(toolID, out)
+			}
+			return out, nil
 		}
 		r.OnEvent = func(ctx context.Context, typ string, data map[string]any) {
 			mid := types.MissionID("")
@@ -585,7 +606,8 @@ func (k *Kernel) executeMission(
 			if labels != nil && labels["skills"] != "" {
 				ids = strings.Split(labels["skills"], ",")
 			}
-			skillBlock = k.Skills.Compose(ids, 4000)
+			skillBlock = contextpack.Compact(k.Skills.Compose(ids, 4000), 4000)
+			skillBlock = contextpack.Sanitize("skills", skillBlock)
 		}
 		wsRoot := ""
 		// workspace root from env preferred by tools already; surface for prompt

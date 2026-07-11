@@ -71,6 +71,9 @@ conform-full: build ## AESP hermes-agent-os profile
 e2e: build ## Full Host HTTP e2e (starts temp hermesd if needed)
 	bash scripts/e2e-host.sh
 
+e2e-agent-os: build ## Agent OS workspace e2e (notes/docs/chat/jobs/tools)
+	bash scripts/e2e-agent-os.sh
+
 bench: ## Go benchmarks for mission path
 	cd $(KERNEL_DIR) && go test ./pkg/perf/ -bench=. -benchmem -count=1
 
