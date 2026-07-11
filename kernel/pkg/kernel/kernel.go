@@ -8,23 +8,33 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/a2a"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/echo"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/openaicompat"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/steps"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/agentregistry"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/artifact"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/capability"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/credentials"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/deck"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/deploy"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/docgen"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/eventbus"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/host"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/knowledge"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/mcpbridge"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/planner"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/policy"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/provider"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/remediation"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/router"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/runtime"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/security"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/toolrouter"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/workflow"
 )
 
 // Kernel is the host-neutral core of Hermes Agent OS.
@@ -44,6 +54,18 @@ type Kernel struct {
 	Sessions    *deck.SessionsService
 	Board       *deck.BoardService
 	Routines    *deck.RoutinesService
+
+	// Platform services (gap closures)
+	Artifacts *artifact.Store
+	Agents    *agentregistry.Registry
+	Plans     *planner.Store
+	Workflow  *workflow.Orchestrator
+	Knowledge *knowledge.Graph
+	MCP       *mcpbridge.Bridge
+	A2A       *a2a.Registry
+	Remediate *remediation.Engine
+	Deploy    *deploy.Service
+	Docs      *docgen.Generator
 
 	// Live instances collected from registry (refreshed on demand)
 	providers []provider.Provider
@@ -103,6 +125,16 @@ func NewWithOptions(opts Options) *Kernel {
 	k.Sessions = deck.NewSessions(k)
 	k.Board = deck.NewBoard()
 	k.Routines = deck.NewRoutines(k)
+	k.Artifacts = artifact.New()
+	k.Agents = agentregistry.New()
+	k.Plans = planner.New()
+	k.Workflow = workflow.New(k.Plans, k)
+	k.Knowledge = knowledge.New()
+	k.MCP = mcpbridge.New(tools)
+	k.A2A = a2a.New()
+	k.Remediate = remediation.New()
+	k.Deploy = deploy.New()
+	k.Docs = docgen.New()
 	k.refreshAdapters()
 	return k
 }
@@ -477,6 +509,27 @@ func (k *Kernel) executeMission(
 		Data: map[string]any{"kind": "episodic", "trust": string(types.TrustAgent)},
 	})
 
+	// Content-addressed artifact of mission output (CG-ARTIFACT)
+	var artDigest types.ArtifactDigest
+	if result.Output != "" && k.Artifacts != nil {
+		if meta, err := k.Artifacts.Put(ctx, []byte(result.Output), "text/plain", id, map[string]string{
+			"kind": "mission-output",
+		}); err == nil {
+			artDigest = meta.Digest
+			_ = k.bus.Publish(ctx, eventbus.Event{
+				Type: "artifact.created", MissionID: id,
+				Data: map[string]any{"digest": string(meta.Digest), "size": meta.Size},
+			})
+		}
+	}
+	// Knowledge graph node for mission (KG-GRAPH integration)
+	if k.Knowledge != nil {
+		n := k.Knowledge.UpsertNode(knowledge.Node{
+			Type: "mission", Props: map[string]string{"id": string(id), "goal": goal},
+		})
+		_ = n
+	}
+
 	state := host.StateSucceeded
 	if result.Status == "failed" {
 		state = host.StateFailed
@@ -491,9 +544,12 @@ func (k *Kernel) executeMission(
 	}
 	k.mu.Unlock()
 
+	data := map[string]any{"state": string(state), "output": result.Output}
+	if artDigest != "" {
+		data["artifactDigest"] = string(artDigest)
+	}
 	_ = k.bus.Publish(ctx, eventbus.Event{
-		Type: "mission.updated", MissionID: id,
-		Data: map[string]any{"state": string(state), "output": result.Output},
+		Type: "mission.updated", MissionID: id, Data: data,
 	})
 	return nil
 }

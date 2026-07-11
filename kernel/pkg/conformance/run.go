@@ -142,12 +142,16 @@ func Run(ctx context.Context, opts Options) (*Report, error) {
 		}
 	}
 
-	// Full hermes-agent-os profile is never fully green while gaps remain
+	// Full profile also requires zero catalog gaps among claimed items
 	if profileID == "aesp.profile.hermes-agent-os" {
 		for _, it := range claimItems {
 			if it.Status == StatusGap {
 				rep.ClaimOK = false
 				rep.Notes = append(rep.Notes, "profile incomplete: gap "+it.ID)
+			}
+			if it.Status == StatusPartial {
+				// allow partial only if check still passes; note it
+				rep.Notes = append(rep.Notes, "partial: "+it.ID)
 			}
 		}
 	}

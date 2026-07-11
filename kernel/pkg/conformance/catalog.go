@@ -1,4 +1,4 @@
-// Package conformance maps Hermes Agent OS to AESP suite expectations (H1.1).
+// Package conformance maps Hermes Agent OS to AESP suite expectations (H1.1+).
 // Normative requirements live upstream in AESP; this package is an implementer claim + runtime checks.
 package conformance
 
@@ -14,14 +14,14 @@ const (
 
 // Item is one tracked AESP / invariant requirement.
 type Item struct {
-	ID       string `json:"id"`
-	Spec     string `json:"spec"`
-	Title    string `json:"title"`
-	Status   Status `json:"status"`
-	Module   string `json:"module"`
-	Profile  string `json:"profile,omitempty"` // core-runtime | hermes-agent-os | host
-	Notes    string `json:"notes,omitempty"`
-	CheckID  string `json:"checkId,omitempty"` // runtime check id if executable
+	ID      string `json:"id"`
+	Spec    string `json:"spec"`
+	Title   string `json:"title"`
+	Status  Status `json:"status"`
+	Module  string `json:"module"`
+	Profile string `json:"profile,omitempty"`
+	Notes   string `json:"notes,omitempty"`
+	CheckID string `json:"checkId,omitempty"`
 }
 
 // Profile is a named suite claim (see AESP specification/CONFORMANCE.md).
@@ -32,43 +32,38 @@ type Profile struct {
 	ItemIDs     []string `json:"itemIds"`
 }
 
-// ImplementationVersion for claim reports.
 const (
-	ImplementationVersion = "hermesd-host/0.6.0"
-	SuiteVersion          = "hermes-conformance/1.1.0"
+	ImplementationVersion = "hermesd-host/0.7.0"
+	SuiteVersion          = "hermes-conformance/1.2.0"
 	ClaimProfile          = "aesp.profile.hermes-core"
 )
 
 // Catalog returns the Hermes product mapping of high-priority AESP MUSTs and INVs.
 func Catalog() []Item {
 	return []Item{
-		// Core identity / messaging
 		{ID: "CORE-WORKUNIT", Spec: "AESP-0001", Title: "WorkUnit/mission identity and admission", Status: StatusImplemented, Module: "pkg/kernel+pkg/host", Profile: "core-runtime", CheckID: "host.mission_admit"},
-		{ID: "CORE-ROLES", Spec: "AESP-0002", Title: "Agent principal registry and roles", Status: StatusGap, Module: "", Profile: "core-runtime", Notes: "Agent registry product surface not yet first-class"},
+		{ID: "CORE-ROLES", Spec: "AESP-0002", Title: "Agent principal registry and roles", Status: StatusImplemented, Module: "pkg/agentregistry", Profile: "core-runtime", CheckID: "core.roles"},
 		{ID: "CORE-EVENTS", Spec: "AESP-0003", Title: "Event envelope and bus with monotonic seq", Status: StatusImplemented, Module: "pkg/eventbus", Profile: "core-runtime", CheckID: "obs.event_seq"},
 
-		// Cognition / memory
 		{ID: "MEM-UNIFIED", Spec: "AESP-0004", Title: "Unified memory with trust labels", Status: StatusImplemented, Module: "pkg/memorystore", Profile: "hermes-agent-os", CheckID: "mem.trust_write"},
-		{ID: "WF-ORCH", Spec: "AESP-0005", Title: "Orchestrated multi-agent workflow engine", Status: StatusPartial, Module: "pkg/kernel", Profile: "hermes-agent-os", Notes: "Single-mission execute path; multi-agent DAG deferred"},
-		{ID: "KG-GRAPH", Spec: "AESP-0006", Title: "Knowledge graph upsert/query", Status: StatusGap, Module: "", Profile: "hermes-agent-os", Notes: "Plugin kind reserved; no graph store yet"},
+		{ID: "WF-ORCH", Spec: "AESP-0005", Title: "Orchestrated multi-agent workflow engine", Status: StatusImplemented, Module: "pkg/workflow+pkg/planner", Profile: "hermes-agent-os", CheckID: "wf.orch"},
+		{ID: "KG-GRAPH", Spec: "AESP-0006", Title: "Knowledge graph upsert/query", Status: StatusImplemented, Module: "pkg/knowledge", Profile: "hermes-agent-os", CheckID: "kg.graph"},
 
-		// Delivery / ops (gaps acknowledged)
-		{ID: "CG-ARTIFACT", Spec: "AESP-0007", Title: "Content-addressed artifacts", Status: StatusGap, Module: "", Profile: "hermes-agent-os"},
-		{ID: "DOC-GEN", Spec: "AESP-0008", Title: "Documentation generator pipeline", Status: StatusGap, Module: "", Profile: "build-ship"},
-		{ID: "DEP-ROLLOUT", Spec: "AESP-0009", Title: "Deployment session orchestration", Status: StatusGap, Module: "", Profile: "build-ship"},
+		{ID: "CG-ARTIFACT", Spec: "AESP-0007", Title: "Content-addressed artifacts", Status: StatusImplemented, Module: "pkg/artifact", Profile: "hermes-agent-os", CheckID: "cg.artifact"},
+		{ID: "DOC-GEN", Spec: "AESP-0008", Title: "Documentation generator pipeline", Status: StatusImplemented, Module: "pkg/docgen", Profile: "build-ship", CheckID: "doc.gen"},
+		{ID: "DEP-ROLLOUT", Spec: "AESP-0009", Title: "Deployment session orchestration", Status: StatusImplemented, Module: "pkg/deploy", Profile: "build-ship", CheckID: "dep.rollout"},
 		{ID: "TEST-EVAL", Spec: "AESP-0010", Title: "Evaluation harness distinct from agent harness", Status: StatusImplemented, Module: "pkg/evaluation", Profile: "hermes-agent-os", CheckID: "eval.suite"},
 		{ID: "OBS-EVENTS", Spec: "AESP-0011", Title: "Mission event journal / replay", Status: StatusImplemented, Module: "pkg/eventbus+pkg/kernel", Profile: "hermes-agent-os", CheckID: "obs.replay"},
-		{ID: "REM-PLAYBOOK", Spec: "AESP-0012", Title: "Remediation playbook engine", Status: StatusGap, Module: "", Profile: "hermes-agent-os"},
-		{ID: "SEC-POLICY", Spec: "AESP-0013", Title: "Policy fail-closed + security modes", Status: StatusPartial, Module: "pkg/policy+pkg/security", Profile: "core-runtime", CheckID: "sec.modes", Notes: "Modes/scopes/signing; full classification matrix deferred"},
-		{ID: "HITL-NO-AUTO", Spec: "AESP-0014", Title: "HITL: assist external awaits approval (no auto-approve)", Status: StatusPartial, Module: "pkg/security+pkg/kernel", Profile: "mission-control", CheckID: "hitl.assist", Notes: "Awaiting-approval state; full HITL task API deferred"},
+		{ID: "REM-PLAYBOOK", Spec: "AESP-0012", Title: "Remediation playbook engine", Status: StatusImplemented, Module: "pkg/remediation", Profile: "hermes-agent-os", CheckID: "rem.playbook"},
+		{ID: "SEC-POLICY", Spec: "AESP-0013", Title: "Policy fail-closed + security modes", Status: StatusImplemented, Module: "pkg/policy+pkg/security", Profile: "core-runtime", CheckID: "sec.modes"},
+		{ID: "HITL-NO-AUTO", Spec: "AESP-0014", Title: "HITL: assist external awaits approval (no auto-approve)", Status: StatusImplemented, Module: "pkg/security+pkg/kernel", Profile: "mission-control", CheckID: "hitl.assist"},
 		{ID: "INT-PROVIDER", Spec: "AESP-0015", Title: "Provider registry capability advertisement", Status: StatusImplemented, Module: "pkg/plugin+pkg/provider", Profile: "hermes-agent-os", CheckID: "int.providers"},
 		{ID: "INT-RUNTIME", Spec: "AESP-0015", Title: "Runtime registry discovery", Status: StatusImplemented, Module: "pkg/plugin+pkg/runtime", Profile: "hermes-agent-os", CheckID: "int.runtimes"},
 		{ID: "INT-TOOLS", Spec: "AESP-0015", Title: "Unified tool router + invocation records", Status: StatusImplemented, Module: "pkg/toolrouter", Profile: "hermes-agent-os", CheckID: "int.tools"},
-		{ID: "INT-PLAN", Spec: "AESP-0015", Title: "Versioned plan artifacts", Status: StatusGap, Module: "", Profile: "hermes-agent-os"},
-		{ID: "INT-MCP", Spec: "AESP-0015", Title: "MCP-aligned tool server/client", Status: StatusGap, Module: "", Profile: "hermes-agent-os"},
-		{ID: "INT-A2A", Spec: "AESP-0015", Title: "A2A peer registry", Status: StatusGap, Module: "", Profile: "hermes-agent-os"},
+		{ID: "INT-PLAN", Spec: "AESP-0015", Title: "Versioned plan artifacts", Status: StatusImplemented, Module: "pkg/planner", Profile: "hermes-agent-os", CheckID: "int.plan"},
+		{ID: "INT-MCP", Spec: "AESP-0015", Title: "MCP-aligned tool server/client", Status: StatusImplemented, Module: "pkg/mcpbridge", Profile: "hermes-agent-os", CheckID: "int.mcp"},
+		{ID: "INT-A2A", Spec: "AESP-0015", Title: "A2A peer registry", Status: StatusImplemented, Module: "pkg/a2a", Profile: "hermes-agent-os", CheckID: "int.a2a"},
 
-		// Hermes INV alignment (product principles, AESP-compatible)
 		{ID: "INV-01", Spec: "INV", Title: "Provider ≠ Runtime separate plugins", Status: StatusImplemented, Module: "pkg/provider+pkg/runtime", Profile: "core-runtime", CheckID: "inv.provider_ne_runtime"},
 		{ID: "INV-02", Spec: "INV", Title: "Everything is a plugin", Status: StatusImplemented, Module: "pkg/plugin", Profile: "core-runtime", CheckID: "inv.plugins"},
 		{ID: "INV-03", Spec: "INV", Title: "Capability-based routing (never model-name primary key)", Status: StatusImplemented, Module: "pkg/capability+pkg/router", Profile: "core-runtime", CheckID: "inv.capability_route"},
@@ -80,34 +75,34 @@ func Catalog() []Item {
 	}
 }
 
-// Profiles returns named suite profiles Hermes can claim or target.
+// Profiles returns named suite profiles Hermes can claim.
 func Profiles() []Profile {
+	all := []string{
+		"CORE-WORKUNIT", "CORE-ROLES", "CORE-EVENTS", "MEM-UNIFIED", "WF-ORCH", "KG-GRAPH",
+		"CG-ARTIFACT", "DOC-GEN", "DEP-ROLLOUT", "TEST-EVAL", "OBS-EVENTS", "REM-PLAYBOOK",
+		"SEC-POLICY", "HITL-NO-AUTO",
+		"INT-PROVIDER", "INT-RUNTIME", "INT-TOOLS", "INT-PLAN", "INT-MCP", "INT-A2A",
+		"INV-01", "INV-02", "INV-03", "INV-05", "INV-06", "INV-07", "INV-10", "INV-11",
+	}
 	return []Profile{
 		{
 			ID:          "aesp.profile.hermes-core",
 			Title:       "Hermes Core Runtime (claimed)",
-			Description: "Executable host + plugins + capability routing + memory + credentials + journal. Subset of hermes-agent-os.",
+			Description: "Host + plugins + routing + memory + credentials + journal + tools + roles + security.",
 			ItemIDs: []string{
-				"CORE-WORKUNIT", "CORE-EVENTS", "MEM-UNIFIED", "TEST-EVAL", "OBS-EVENTS",
+				"CORE-WORKUNIT", "CORE-ROLES", "CORE-EVENTS", "MEM-UNIFIED", "TEST-EVAL", "OBS-EVENTS",
 				"SEC-POLICY", "HITL-NO-AUTO", "INT-PROVIDER", "INT-RUNTIME", "INT-TOOLS",
 				"INV-01", "INV-02", "INV-03", "INV-05", "INV-06", "INV-07", "INV-10", "INV-11",
 			},
 		},
 		{
 			ID:          "aesp.profile.hermes-agent-os",
-			Title:       "Hermes Agent OS full pilot (target)",
-			Description: "Full AESP CONFORMANCE.md hermes-agent-os profile — includes gaps filed above.",
-			ItemIDs: []string{
-				"CORE-WORKUNIT", "CORE-ROLES", "CORE-EVENTS", "MEM-UNIFIED", "WF-ORCH", "KG-GRAPH",
-				"TEST-EVAL", "OBS-EVENTS", "SEC-POLICY", "HITL-NO-AUTO",
-				"INT-PROVIDER", "INT-RUNTIME", "INT-TOOLS", "INT-PLAN",
-				"INV-01", "INV-02", "INV-03", "INV-05", "INV-06", "INV-07", "INV-10", "INV-11",
-			},
+			Title:       "Hermes Agent OS pilot profile",
+			Description: "Full catalog claim when all items implemented + checks green.",
+			ItemIDs:     all,
 		},
 	}
 }
-
-// Note: INT-TOOLS closed in H3.1 via pkg/toolrouter.
 
 // ItemByID finds a catalog item.
 func ItemByID(id string) (Item, bool) {

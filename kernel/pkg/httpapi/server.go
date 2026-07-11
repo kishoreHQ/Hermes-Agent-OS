@@ -16,7 +16,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
-const Version = "hermesd-host/0.6.0"
+const Version = "hermesd-host/0.7.0"
 
 // Server is the Host HTTP surface.
 type Server struct {
@@ -42,6 +42,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/security/posture", s.apiSecurityPosture)
 	mux.HandleFunc("/api/v1/policies", s.apiPolicies)
 	s.registerDeckRoutes(mux)
+	s.registerPlatformRoutes(mux)
 
 	// Mission Control SPA when mission-control/dist exists (H3 / GAP-UI-002 parity)
 	if dist := uiDistPath(); dist != "" {
@@ -253,8 +254,18 @@ func (s *Server) apiRegistry(w http.ResponseWriter, r *http.Request) {
 			items = append(items, manifestJSON(m, "tool"))
 		}
 	case "agents":
-		// Host-neutral placeholder until agent plugins exist
-		items = []map[string]any{}
+		if s.k.Agents != nil {
+			for _, a := range s.k.Agents.List() {
+				caps := make([]string, 0, len(a.Capabilities))
+				for _, c := range a.Capabilities {
+					caps = append(caps, string(c))
+				}
+				items = append(items, map[string]any{
+					"id": string(a.ID), "name": a.Name, "kind": "agent",
+					"roles": a.Roles, "capabilities": caps, "enabled": a.Enabled,
+				})
+			}
+		}
 	default:
 		writeErr(w, 404, "not_found", "unknown registry kind", "providers|runtimes|tools|agents")
 		return

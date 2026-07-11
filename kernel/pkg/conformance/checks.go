@@ -10,10 +10,13 @@ import (
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/bootstrap"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/capability"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/deploy"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/docgen"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/evaluation"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/host"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/httpapi"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/kernel"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/knowledge"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/runtime"
@@ -45,6 +48,16 @@ func Checks() map[string]CheckFunc {
 		"int.providers":           checkProviders,
 		"int.runtimes":            checkRuntimes,
 		"int.tools":               checkTools,
+		"int.plan":                checkPlan,
+		"int.mcp":                 checkMCP,
+		"int.a2a":                 checkA2A,
+		"core.roles":              checkRoles,
+		"cg.artifact":             checkArtifact,
+		"wf.orch":                 checkWorkflow,
+		"kg.graph":                checkKG,
+		"rem.playbook":            checkRemediation,
+		"dep.rollout":             checkDeploy,
+		"doc.gen":                 checkDocgen,
 		"inv.provider_ne_runtime": checkProviderNeRuntime,
 		"inv.plugins":             checkPlugins,
 		"inv.capability_route":    checkCapabilityRoute,
@@ -236,6 +249,147 @@ func checkTools(ctx context.Context, k *kernel.Kernel) CheckResult {
 		return fail("int.tools", "no invocation record")
 	}
 	return pass("int.tools", "invoke+audit ok")
+}
+
+func checkRoles(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.Agents == nil || len(k.Agents.List()) < 1 {
+		return fail("core.roles", "no agents")
+	}
+	if !k.Agents.HasRole("agent.default", "builder") {
+		return fail("core.roles", "missing builder role")
+	}
+	return pass("core.roles", fmt.Sprintf("agents=%d", len(k.Agents.List())))
+}
+
+func checkArtifact(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.Artifacts == nil {
+		return fail("cg.artifact", "nil store")
+	}
+	m, err := k.Artifacts.Put(ctx, []byte("artifact-body"), "text/plain", "m-conf", nil)
+	if err != nil || !strings.HasPrefix(string(m.Digest), "sha256:") {
+		return fail("cg.artifact", fmt.Sprintf("%v %v", m, err))
+	}
+	data, _, err := k.Artifacts.Get(ctx, m.Digest)
+	if err != nil || string(data) != "artifact-body" {
+		return fail("cg.artifact", "get failed")
+	}
+	return pass("cg.artifact", string(m.Digest))
+}
+
+func checkPlan(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.Plans == nil {
+		return fail("int.plan", "nil")
+	}
+	p, err := k.Plans.Create("m1", "plan goal", nil)
+	if err != nil || p.Version != 1 || len(p.Steps) < 2 {
+		return fail("int.plan", fmt.Sprintf("%+v %v", p, err))
+	}
+	p2, err := k.Plans.BumpVersion(p.ID, nil)
+	if err != nil || p2.Version != 2 {
+		return fail("int.plan", "version bump")
+	}
+	return pass("int.plan", p.ID)
+}
+
+func checkWorkflow(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.Workflow == nil || k.Plans == nil {
+		return fail("wf.orch", "nil")
+	}
+	p, err := k.Plans.Create("", "orchestrate conf", nil)
+	if err != nil {
+		return fail("wf.orch", err.Error())
+	}
+	res, err := k.Workflow.RunPlan(ctx, p.ID)
+	if err != nil || res.Status != "completed" || len(res.StepMissions) < 2 {
+		return fail("wf.orch", fmt.Sprintf("%+v %v", res, err))
+	}
+	return pass("wf.orch", fmt.Sprintf("steps=%d", len(res.StepMissions)))
+}
+
+func checkKG(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.Knowledge == nil {
+		return fail("kg.graph", "nil")
+	}
+	a := k.Knowledge.UpsertNode(knowledge.Node{Type: "entity", Props: map[string]string{"name": "alpha"}})
+	b := k.Knowledge.UpsertNode(knowledge.Node{Type: "entity", Props: map[string]string{"name": "beta"}})
+	_, err := k.Knowledge.UpsertEdge(knowledge.Edge{From: a.ID, To: b.ID, Rel: "related"})
+	if err != nil {
+		return fail("kg.graph", err.Error())
+	}
+	if len(k.Knowledge.Query("entity", "alp")) < 1 {
+		return fail("kg.graph", "query miss")
+	}
+	return pass("kg.graph", "upsert+query")
+}
+
+func checkMCP(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.MCP == nil || len(k.MCP.ListTools()) < 1 {
+		return fail("int.mcp", "no tools")
+	}
+	out, err := k.MCP.CallTool(ctx, "echo", map[string]any{"text": "mcp-ok"})
+	if err != nil || out != "mcp-ok" {
+		return fail("int.mcp", fmt.Sprintf("%v %v", out, err))
+	}
+	return pass("int.mcp", "list+call")
+}
+
+func checkA2A(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.A2A == nil || len(k.A2A.List()) < 1 {
+		return fail("int.a2a", "no peers")
+	}
+	peer := k.A2A.List()[0]
+	task, err := k.A2A.OfferTask(peer.ID, "peer task")
+	if err != nil || task.Status != "done" {
+		return fail("int.a2a", fmt.Sprintf("%+v %v", task, err))
+	}
+	return pass("int.a2a", string(peer.ID))
+}
+
+func checkRemediation(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.Remediate == nil || len(k.Remediate.List()) < 1 {
+		return fail("rem.playbook", "none")
+	}
+	pb := k.Remediate.List()[0]
+	run, err := k.Remediate.Run(pb.ID, false)
+	if err != nil || run.Status != "ok" {
+		return fail("rem.playbook", fmt.Sprintf("%+v %v", run, err))
+	}
+	_, err = k.Remediate.Run(pb.ID, true)
+	if err == nil {
+		return fail("rem.playbook", "freeze should deny")
+	}
+	return pass("rem.playbook", "run+freeze-deny")
+}
+
+func checkDeploy(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.Deploy == nil || k.Artifacts == nil {
+		return fail("dep.rollout", "nil")
+	}
+	meta, err := k.Artifacts.Put(ctx, []byte("deploy-blob"), "application/octet-stream", "", nil)
+	if err != nil {
+		return fail("dep.rollout", err.Error())
+	}
+	ds, err := k.Deploy.Create(deploy.CreateReq{Artifact: string(meta.Digest), Strategy: "rolling"})
+	if err != nil {
+		return fail("dep.rollout", err.Error())
+	}
+	ds, _ = k.Deploy.Advance(ds.ID, false)
+	ds, err = k.Deploy.Advance(ds.ID, false)
+	if err != nil || ds.Status != "succeeded" {
+		return fail("dep.rollout", fmt.Sprintf("%+v %v", ds, err))
+	}
+	return pass("dep.rollout", ds.ID)
+}
+
+func checkDocgen(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.Docs == nil {
+		return fail("doc.gen", "nil")
+	}
+	doc, err := k.Docs.Generate(docgen.GenerateReq{Title: "Conf Doc", Goal: "document system", Kind: "readme"})
+	if err != nil || doc.Body == "" {
+		return fail("doc.gen", fmt.Sprintf("%v %v", doc, err))
+	}
+	return pass("doc.gen", doc.ID)
 }
 
 func checkProviderNeRuntime(ctx context.Context, k *kernel.Kernel) CheckResult {

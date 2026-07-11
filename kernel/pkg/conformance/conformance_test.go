@@ -48,17 +48,16 @@ func TestRunHermesCoreClaim(t *testing.T) {
 	}
 }
 
-func TestRunFullProfileHasGaps(t *testing.T) {
+func TestRunFullProfileGreen(t *testing.T) {
 	rep, err := Run(context.Background(), Options{Profile: "aesp.profile.hermes-agent-os"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Full profile must not claim green while gaps remain
-	if rep.ClaimOK {
-		t.Fatal("full hermes-agent-os should not be green yet")
+	if rep.Gap != 0 {
+		t.Fatalf("expected 0 gaps, got %d\n%s", rep.Gap, Format(rep))
 	}
-	if rep.Gap < 1 {
-		t.Fatal("expected gaps in catalog")
+	if !rep.ClaimOK {
+		t.Fatal(Format(rep))
 	}
 }
 

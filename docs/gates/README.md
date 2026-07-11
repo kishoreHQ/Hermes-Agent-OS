@@ -13,6 +13,7 @@ Product acceptance gates for Hermes-Agent-OS.
 | H1.1 | AESP hermes-core conformance (`make conform`) | **PASS** |
 | H3.1 | Command Deck Host API + UI | **PASS** |
 | GAP | INT-TOOLS closed | **PASS** |
+| GAP | All remaining catalog gaps closed | **PASS** (`make conform-full`) |
 
 **H1 demo checklist**
 

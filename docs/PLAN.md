@@ -41,7 +41,7 @@
 - [x] OpenAPI under `schemas/openapi-host-v1.yaml`  
 - [x] `hermesd serve`, `make smoke`  
 - [x] **H1.1** AESP conformance: catalog + executable checks (`make conform`)  
-- [ ] Full `aesp.profile.hermes-agent-os` green (gaps filed; see catalog)  
+- [x] Full `aesp.profile.hermes-agent-os` green (`make conform-full`) — gaps closed by impact  
 
 ### Phase H2 — Plugin runtime
 

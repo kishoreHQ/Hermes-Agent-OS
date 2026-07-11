@@ -114,6 +114,7 @@ scripts/             # Dev helpers
 | **H1.1** AESP hermes-core claim | Done (`make conform`) |
 | **H3.1** Command Deck | Done |
 | **Provider** OpenAI-compatible | Done (`provider.openai.compat`) |
+| **Catalog gaps** (impact order) | Done — `make conform-full` green |
 
 Working Agent OS + Mission Control prototypes currently also live in AESP-Reference-Implementation until Hermes reaches full product parity (deliberate migration, not abandonment).
 

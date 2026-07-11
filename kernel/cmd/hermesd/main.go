@@ -91,7 +91,7 @@ func runStatus() {
 		os.Exit(1)
 	}
 	printBanner()
-	fmt.Println("status: H5 production hardening")
+	fmt.Println("status: platform complete · catalog gaps closed")
 	fmt.Println("plugins registered:", len(res.Registry.List("")))
 	fmt.Printf("  providers: %d  runtimes: %d\n",
 		len(res.Registry.List(plugin.KindProvider)),
