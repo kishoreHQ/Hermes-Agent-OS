@@ -38,12 +38,12 @@ type Report struct {
 	Failed    int
 }
 
-// DefaultCases covers the 2×2 provider×runtime matrix.
+// DefaultCases covers the provider×runtime matrix (default runtime = agent-loop).
 func DefaultCases() []Case {
 	return []Case{
 		{
-			Name: "default free-local + echo runtime",
-			ExpectProvider: "provider.example.echo", ExpectRuntime: "runtime.example.echo",
+			Name: "default free-local + agent-loop runtime",
+			ExpectProvider: "provider.example.echo", ExpectRuntime: "runtime.agent.loop",
 		},
 		{
 			Name: "prefer steps runtime",
@@ -51,12 +51,17 @@ func DefaultCases() []Case {
 			ExpectProvider: "provider.example.echo", ExpectRuntime: "runtime.example.steps",
 		},
 		{
-			Name: "exclude free-local → budget provider",
+			Name: "prefer echo runtime (legacy harness)",
+			Labels: map[string]string{"route.preferRuntime": "runtime.example.echo"},
+			ExpectProvider: "provider.example.echo", ExpectRuntime: "runtime.example.echo",
+		},
+		{
+			Name: "exclude free-local → budget provider + agent-loop",
 			Labels: map[string]string{
 				"route.excludeProvider": "provider.example.echo",
 				"route.preferLocal":     "false",
 			},
-			ExpectProvider: "provider.example.budget", ExpectRuntime: "runtime.example.echo",
+			ExpectProvider: "provider.example.budget", ExpectRuntime: "runtime.agent.loop",
 		},
 		{
 			Name: "budget provider + steps runtime",

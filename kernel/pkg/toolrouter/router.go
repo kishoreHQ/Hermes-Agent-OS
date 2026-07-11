@@ -18,6 +18,8 @@ type Tool struct {
 	Description string            `json:"description,omitempty"`
 	Enabled     bool              `json:"enabled"`
 	Labels      map[string]string `json:"labels,omitempty"`
+	// Parameters is JSON Schema for the tool arguments (OpenAI tools format).
+	Parameters map[string]any `json:"parameters,omitempty"`
 }
 
 // Invocation is an audit record of a tool call.
@@ -49,16 +51,19 @@ type Router struct {
 func New() *Router {
 	r := &Router{tools: map[string]Tool{}, h: map[string]Handler{}}
 	// Built-in platform tools (vendor-neutral)
-	_ = r.Register(Tool{ID: "echo", Name: "echo", Description: "Echo input text", Enabled: true}, func(ctx context.Context, input map[string]any) (string, error) {
+	_ = r.Register(Tool{
+		ID: "echo", Name: "echo", Description: "Echo input text", Enabled: true,
+		Parameters: map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}}},
+	}, func(ctx context.Context, input map[string]any) (string, error) {
 		if t, ok := input["text"].(string); ok {
 			return t, nil
 		}
 		return fmt.Sprintf("%v", input), nil
 	})
-	_ = r.Register(Tool{ID: "memory.write", Name: "memory.write", Description: "Record note (handled by kernel path)", Enabled: true}, func(ctx context.Context, input map[string]any) (string, error) {
-		return "ok", nil
-	})
-	_ = r.Register(Tool{ID: "time.now", Name: "time.now", Description: "UTC timestamp", Enabled: true}, func(ctx context.Context, input map[string]any) (string, error) {
+	_ = r.Register(Tool{
+		ID: "time.now", Name: "time.now", Description: "UTC timestamp", Enabled: true,
+		Parameters: map[string]any{"type": "object", "properties": map[string]any{}},
+	}, func(ctx context.Context, input map[string]any) (string, error) {
 		return time.Now().UTC().Format(time.RFC3339Nano), nil
 	})
 	return r
@@ -75,6 +80,23 @@ func (r *Router) Register(t Tool, h Handler) error {
 		r.h[t.ID] = h
 	}
 	return nil
+}
+
+// Unregister removes a tool (MCP disconnect).
+func (r *Router) Unregister(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.tools, id)
+	delete(r.h, id)
+	return nil
+}
+
+// Get returns a tool by id.
+func (r *Router) Get(id string) (Tool, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	t, ok := r.tools[id]
+	return t, ok
 }
 
 func (r *Router) List() []Tool {

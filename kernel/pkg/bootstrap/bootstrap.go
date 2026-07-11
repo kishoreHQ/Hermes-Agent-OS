@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/agentloop"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/echo"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/openaicompat"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/steps"
@@ -14,6 +15,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/kernel"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/workspacetools"
 )
 
 func memoryFactory(m plugin.Manifest) (any, error) {
@@ -27,6 +29,7 @@ func DefaultFactories() *plugin.FactoryRegistry {
 	f.Register("echo-provider", echo.ProviderFactory)
 	f.Register("echo-runtime", echo.RuntimeFactory)
 	f.Register("steps-runtime", steps.RuntimeFactory)
+	f.Register("agentloop-runtime", agentloop.RuntimeFactory)
 	f.Register("openai-compat", openaicompat.ProviderFactory)
 	f.Register("memory-ephemeral", memoryFactory)
 	// Id aliases
@@ -34,6 +37,7 @@ func DefaultFactories() *plugin.FactoryRegistry {
 	f.Register("runtime.example.echo", echo.RuntimeFactory)
 	f.Register("provider.example.budget", echo.ProviderFactory)
 	f.Register("runtime.example.steps", steps.RuntimeFactory)
+	f.Register("runtime.agent.loop", agentloop.RuntimeFactory)
 	f.Register("provider.openai.compat", openaicompat.ProviderFactory)
 	f.Register("provider.kimchi", openaicompat.ProviderFactory)
 	f.Register("memory.example.ephemeral", memoryFactory)
@@ -129,12 +133,54 @@ func New(opts Options) (*Result, error) {
 	// https://llm.kimchi.dev/openai/v1 — same endpoint Cursor/OpenCode use.
 	ensureKimchiProvider(reg, factories, k)
 
+	// Workspace tools (fs, shell, web, memory, research) + skills dir
+	_ = workspacetools.Register(k.Tools(), workspacetools.Options{
+		Memory:     k.Memory(),
+		AllowShell: true,
+	})
+	if k.Skills != nil {
+		// Load skills from HERMES_SKILLS_DIR or ./skills or ../skills
+		for _, d := range []string{os.Getenv("HERMES_SKILLS_DIR"), "skills", "../skills", "plugins/skills"} {
+			if d == "" {
+				continue
+			}
+			if st, err := os.Stat(d); err == nil && st.IsDir() {
+				_ = k.Skills.LoadDir(d)
+				break
+			}
+		}
+	}
+	// Ensure agent-loop runtime always present
+	ensureAgentLoop(reg, factories, k)
+
 	return &Result{
 		Kernel:       k,
 		Registry:     reg,
 		Loaded:       loaded,
 		LoadWarnings: warn,
 	}, nil
+}
+
+func ensureAgentLoop(reg plugin.Registry, factories *plugin.FactoryRegistry, k *kernel.Kernel) {
+	if _, _, ok := reg.Get("runtime.agent.loop"); ok {
+		k.RefreshAdapters()
+		return
+	}
+	m := plugin.Manifest{
+		APIVersion: "hermes.plugin/v1",
+		Kind:       plugin.KindRuntime,
+		Metadata:   plugin.Metadata{ID: "runtime.agent.loop", Version: "1.0.0", Name: "Agent Loop (tool-calling)"},
+		Spec: map[string]any{
+			"sandboxTier":     "process-pty",
+			"capabilitiesIn":  []any{"coding", "tools", "reasoning"},
+			"capabilitiesOut": []any{"artifacts", "plan", "tools"},
+		},
+		Labels: map[string]string{"hermes.driver": "agentloop-runtime"},
+	}
+	if inst, err := factories.Create(m); err == nil {
+		_ = reg.Register(m, inst)
+		k.RefreshAdapters()
+	}
 }
 
 // ensureKimchiProvider registers provider.kimchi when an API key is present, or
@@ -244,6 +290,17 @@ func seedBuiltins(reg plugin.Registry, f *plugin.FactoryRegistry) error {
 				"capabilitiesOut": []any{"artifacts", "plan"},
 			},
 			Labels: map[string]string{"hermes.driver": "steps-runtime", "hermes.example": "true"},
+		},
+		{
+			APIVersion: "hermes.plugin/v1",
+			Kind:       plugin.KindRuntime,
+			Metadata:   plugin.Metadata{ID: "runtime.agent.loop", Version: "1.0.0", Name: "Agent Loop (tool-calling)"},
+			Spec: map[string]any{
+				"sandboxTier":     "process-pty",
+				"capabilitiesIn":  []any{"coding", "tools", "reasoning"},
+				"capabilitiesOut": []any{"artifacts", "plan", "tools"},
+			},
+			Labels: map[string]string{"hermes.driver": "agentloop-runtime"},
 		},
 		{
 			APIVersion: "hermes.plugin/v1",

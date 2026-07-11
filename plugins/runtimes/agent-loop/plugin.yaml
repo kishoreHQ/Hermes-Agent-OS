@@ -1,0 +1,18 @@
+apiVersion: hermes.plugin/v1
+kind: runtime
+metadata:
+  id: runtime.agent.loop
+  version: 1.0.0
+  name: Agent Loop (tool-calling)
+spec:
+  sandboxTier: process-pty
+  capabilitiesIn:
+    - coding
+    - tools
+    - reasoning
+  capabilitiesOut:
+    - artifacts
+    - plan
+    - tools
+labels:
+  hermes.driver: agentloop-runtime

@@ -70,7 +70,9 @@ func TestMissionLifecycleRouteAndMemory(t *testing.T) {
 	if row["providerId"] != "provider.example.echo" {
 		t.Fatalf("provider %v", row["providerId"])
 	}
-	if row["runtimeId"] != "runtime.example.echo" {
+	// Default prefer agent-loop; echo still valid if preferred explicitly
+	rt, _ := row["runtimeId"].(string)
+	if rt != "runtime.agent.loop" && rt != "runtime.example.echo" {
 		t.Fatalf("runtime %v", row["runtimeId"])
 	}
 

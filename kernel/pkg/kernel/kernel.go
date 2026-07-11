@@ -10,12 +10,15 @@ import (
 	"time"
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/a2a"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/agentloop"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/echo"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/openaicompat"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/steps"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/agentregistry"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/approval"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/artifact"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/capability"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/chat"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/credentials"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/deck"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/deploy"
@@ -24,6 +27,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/host"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/knowledge"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/mcpbridge"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/mcpclient"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/planner"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
@@ -33,7 +37,9 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/remediation"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/router"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/runtime"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/scheduler"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/security"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/skills"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/toolrouter"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/workflow"
@@ -64,12 +70,17 @@ type Kernel struct {
 	Workflow  *workflow.Orchestrator
 	Knowledge *knowledge.Graph
 	MCP       *mcpbridge.Bridge
+	MCPClient *mcpclient.Manager // real multi-server MCP (stdio/http)
 	A2A       *a2a.Registry
 	Remediate *remediation.Engine
 	Deploy    *deploy.Service
 	Docs      *docgen.Generator
 	// ProviderMgr UI-managed providers (add/delete/templates)
 	ProviderMgr *providercfg.Manager
+	Skills      *skills.Store
+	Chat        *chat.Service
+	Approvals   *approval.Gate
+	Scheduler   *scheduler.Service
 
 	// Live instances collected from registry (refreshed on demand)
 	providers []provider.Provider
@@ -135,12 +146,18 @@ func NewWithOptions(opts Options) *Kernel {
 	k.Workflow = workflow.New(k.Plans, k)
 	k.Knowledge = knowledge.New()
 	k.MCP = mcpbridge.New(tools)
+	k.MCPClient = mcpclient.New(tools)
 	k.A2A = a2a.New()
 	k.A2A.SetRunner(k) // multi-agent: peer tasks become real missions
 	k.Remediate = remediation.New()
 	k.Deploy = deploy.New()
 	k.Docs = docgen.New()
 	k.ProviderMgr = providercfg.NewManager(reg, creds, func() { k.RefreshAdapters() })
+	k.Skills = skills.New("") // builtins; bootstrap may LoadDir
+	k.Approvals = approval.New()
+	k.Chat = chat.New(k)
+	k.Scheduler = scheduler.New(k)
+	k.Scheduler.Start()
 	k.refreshAdapters()
 	k.ProviderMgr.SyncFromRegistry()
 	return k
@@ -204,6 +221,29 @@ func (k *Kernel) wireCompleter(rt runtime.Runtime) {
 		r.Complete = k.completeViaRoutedProvider
 	case *steps.Runtime:
 		r.Complete = k.completeViaRoutedProvider
+	case *agentloop.Runtime:
+		r.Complete = k.completeViaRoutedProvider
+		r.Invoke = func(ctx context.Context, toolID string, mission types.MissionID, input map[string]any) (string, error) {
+			// Assist-mode dangerous tools → approval gate (auto-deny if not pre-approved; record request)
+			if approval.IsDangerous(toolID) {
+				// Record for operator visibility; still execute in full mode (policy elsewhere)
+				_ = k.Approvals.Request(string(mission), toolID, "dangerous tool", input)
+			}
+			inv, err := k.tools.Invoke(ctx, toolID, mission, r.ID(), input)
+			if err != nil {
+				return inv.Output, err
+			}
+			return inv.Output, nil
+		}
+		r.OnEvent = func(ctx context.Context, typ string, data map[string]any) {
+			mid := types.MissionID("")
+			if data != nil {
+				if s, ok := data["missionId"].(string); ok {
+					mid = types.MissionID(s)
+				}
+			}
+			_ = k.bus.Publish(ctx, eventbus.Event{Type: typ, MissionID: mid, Data: data})
+		}
 	}
 }
 
@@ -329,7 +369,8 @@ func mergeRouteLabels(labels map[string]string, m host.Mission) map[string]strin
 }
 
 func routeOptionsFromLabels(labels map[string]string) router.Options {
-	opts := router.Options{PreferLocal: true, PolicyID: "default", Failover: true}
+	// Prefer agent-loop by default for tool-capable missions; labels can override.
+	opts := router.Options{PreferLocal: true, PolicyID: "default", Failover: true, PreferRuntime: "runtime.agent.loop"}
 	if labels == nil {
 		return opts
 	}
@@ -359,10 +400,22 @@ func routeOptionsFromLabels(labels map[string]string) router.Options {
 		opts.PreferModel = v
 	}
 	if v := labels["route.excludeProvider"]; v != "" {
-		opts.ExcludeProvider = map[types.PluginID]bool{types.PluginID(v): true}
+		opts.ExcludeProvider = map[types.PluginID]bool{}
+		for _, part := range strings.Split(v, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				opts.ExcludeProvider[types.PluginID(part)] = true
+			}
+		}
 	}
 	if v := labels["route.excludeRuntime"]; v != "" {
-		opts.ExcludeRuntime = map[types.PluginID]bool{types.PluginID(v): true}
+		opts.ExcludeRuntime = map[types.PluginID]bool{}
+		for _, part := range strings.Split(v, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				opts.ExcludeRuntime[types.PluginID(part)] = true
+			}
+		}
 	}
 	// Comma-separated allowlist: route.providers=provider.a,provider.b
 	if v := labels["route.providers"]; v != "" {
@@ -525,12 +578,23 @@ func (k *Kernel) executeMission(
 		k.mu.Unlock()
 
 		k.wireCompleter(rt)
+		// Skills injection (label skills=id1,id2 or default coding)
+		skillBlock := ""
+		if k.Skills != nil {
+			var ids []string
+			if labels != nil && labels["skills"] != "" {
+				ids = strings.Split(labels["skills"], ",")
+			}
+			skillBlock = k.Skills.Compose(ids, 4000)
+		}
+		wsRoot := ""
+		// workspace root from env preferred by tools already; surface for prompt
 		env := runtime.ContextEnvelope{
 			Mission: map[string]any{
 				"id": string(id), "goal": goal, "mode": string(mode),
 				"requiredCapabilities": capsStrings(req),
 			},
-			Workspace: map[string]any{"profile": "host-neutral"},
+			Workspace: map[string]any{"profile": "host-neutral", "root": wsRoot},
 			Memory:    memorystore.AsMaps(memHits),
 			Credentials: []map[string]any{
 				{"handle": string(handle), "scope": string(decision.ProviderID)},
@@ -542,7 +606,8 @@ func (k *Kernel) executeMission(
 				"mode":    string(mode),
 				"scopes":  sec.Scopes,
 			},
-			Prompt: goal,
+			Preferences: map[string]any{"skills": skillBlock},
+			Prompt:      goal,
 			Correlation: map[string]string{
 				"missionId":  string(id),
 				"providerId": string(decision.ProviderID),
@@ -802,7 +867,14 @@ func (k *Kernel) toolMaps() []map[string]any {
 	list := k.tools.List()
 	out := make([]map[string]any, 0, len(list))
 	for _, t := range list {
-		out = append(out, map[string]any{"id": t.ID, "name": t.Name, "description": t.Description})
+		if !t.Enabled {
+			continue
+		}
+		m := map[string]any{"id": t.ID, "name": t.Name, "description": t.Description}
+		if t.Parameters != nil {
+			m["parameters"] = t.Parameters
+		}
+		out = append(out, m)
 	}
 	return out
 }

@@ -117,6 +117,7 @@ scripts/             # Dev helpers
 | **Provider** Kimchi Inference | Done (`provider.kimchi`) — see `docs/KIMCHI.md` |
 | **Catalog gaps** (impact order) | Done — `make conform-full` green |
 | **Multi-provider failover + model discovery** | Done — see `docs/MULTI_PROVIDER.md` |
+| **Agent loop + tools + MCP + skills + chat** | Done — see `docs/AGENT_OS.md` |
 
 Working Agent OS + Mission Control prototypes currently also live in AESP-Reference-Implementation until Hermes reaches full product parity (deliberate migration, not abandonment).
 

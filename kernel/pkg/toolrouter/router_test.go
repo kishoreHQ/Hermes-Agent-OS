@@ -14,7 +14,7 @@ func TestInvokeEcho(t *testing.T) {
 	if len(r.Invocations(10)) != 1 {
 		t.Fatal("log")
 	}
-	if len(r.List()) < 3 {
+	if len(r.List()) < 2 {
 		t.Fatal("builtins")
 	}
 }

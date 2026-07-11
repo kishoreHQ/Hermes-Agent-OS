@@ -94,8 +94,8 @@ func TestH4_DefaultRouteFreeLocalAndEcho(t *testing.T) {
 	if m.ProviderID != "provider.example.echo" {
 		t.Fatalf("provider %s", m.ProviderID)
 	}
-	// alphabetical: echo before steps
-	if m.RuntimeID != "runtime.example.echo" {
+	// Default prefer agent-loop (tool-calling); label route.preferRuntime overrides
+	if m.RuntimeID != "runtime.agent.loop" {
 		t.Fatalf("runtime %s", m.RuntimeID)
 	}
 }
@@ -134,7 +134,7 @@ func TestH4_RuntimeSwapPreferSteps(t *testing.T) {
 func TestH4_RuntimeSwapExcludeEcho(t *testing.T) {
 	res := boot(t)
 	m := submit(t, res.Kernel, map[string]string{
-		"route.excludeRuntime": "runtime.example.echo",
+		"route.excludeRuntime": "runtime.example.echo,runtime.agent.loop",
 	})
 	if m.RuntimeID != "runtime.example.steps" {
 		t.Fatalf("runtime %s", m.RuntimeID)
@@ -150,12 +150,13 @@ func TestH4_FullMatrix(t *testing.T) {
 		wantProv types.PluginID
 		wantRT   types.PluginID
 	}{
-		{"echo+echo", nil, "provider.example.echo", "runtime.example.echo"},
+		{"echo+agentloop", nil, "provider.example.echo", "runtime.agent.loop"},
+		{"echo+echo", map[string]string{"route.preferRuntime": "runtime.example.echo"}, "provider.example.echo", "runtime.example.echo"},
 		{"echo+steps", map[string]string{"route.preferRuntime": "runtime.example.steps"}, "provider.example.echo", "runtime.example.steps"},
-		{"budget+echo", map[string]string{
+		{"budget+agentloop", map[string]string{
 			"route.excludeProvider": "provider.example.echo",
 			"route.preferLocal":     "false",
-		}, "provider.example.budget", "runtime.example.echo"},
+		}, "provider.example.budget", "runtime.agent.loop"},
 		{"budget+steps", map[string]string{
 			"route.excludeProvider": "provider.example.echo",
 			"route.preferLocal":     "false",

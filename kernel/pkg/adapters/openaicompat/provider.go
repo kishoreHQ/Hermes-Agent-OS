@@ -1,6 +1,6 @@
 // Package openaicompat is a real OpenAI-compatible HTTP provider plugin.
 // Works with any OpenAI Chat Completions-compatible base URL (local or remote).
-// No vendor hardcoding — baseURL + model + credential handle are config.
+// Supports tools / tool_calls for the agent-loop runtime.
 package openaicompat
 
 import (
@@ -31,16 +31,16 @@ type Provider struct {
 	Resolve  SecretResolver
 
 	// health cache avoids stalling routing on every mission when remote is slow/unreachable
-	healthOK   bool
-	healthErr  error
-	healthAt   time.Time
-	healthTTL  time.Duration
+	healthOK  bool
+	healthErr error
+	healthAt  time.Time
+	healthTTL time.Duration
 }
 
 func NewProvider(m plugin.Manifest) (*Provider, error) {
 	p := &Provider{
 		manifest:  m,
-		client:    &http.Client{Timeout: 120 * time.Second},
+		client:    &http.Client{Timeout: 180 * time.Second},
 		baseURL:   "http://127.0.0.1:11434/v1",
 		healthTTL: 30 * time.Second,
 	}
@@ -65,7 +65,6 @@ func ProviderFactory(m plugin.Manifest) (any, error) {
 func (p *Provider) ID() types.PluginID { return p.manifest.Metadata.ID }
 
 func (p *Provider) Health(ctx context.Context) error {
-	// Cached + short-timeout probe so remote gateways (Kimchi, etc.) don't stall routing.
 	if p.healthTTL > 0 && !p.healthAt.IsZero() && time.Since(p.healthAt) < p.healthTTL {
 		if p.healthOK {
 			return nil
@@ -83,14 +82,11 @@ func (p *Provider) Health(ctx context.Context) error {
 	p.auth(req, "")
 	resp, err := p.client.Do(req)
 	if err != nil {
-		// Unreachable is unhealthy for remote; still allow Complete to fail clearly
 		err = fmt.Errorf("unreachable: %w", err)
 		p.cacheHealth(false, err)
 		return err
 	}
 	defer resp.Body.Close()
-	// 2xx/3xx = up; 401/403 still mean the endpoint is reachable (key may be missing).
-	// 404/5xx = unhealthy for routing.
 	if resp.StatusCode >= 500 || resp.StatusCode == 404 {
 		err = fmt.Errorf("http %d", resp.StatusCode)
 		p.cacheHealth(false, err)
@@ -109,8 +105,6 @@ func (p *Provider) cacheHealth(ok bool, err error) {
 func (p *Provider) Describe(ctx context.Context) (provider.Descriptor, error) {
 	d := p.desc
 	d.BaseURL = p.baseURL
-	// Use manifest models for routing — never network-probe here.
-	// Live discovery is GET ListModels / Host /providers/models (operator path).
 	return d, nil
 }
 
@@ -122,9 +116,6 @@ func (p *Provider) ListModels(ctx context.Context) ([]provider.ModelInfo, error)
 		return nil, err
 	}
 	p.auth(req, p.apiKey)
-	if p.Resolve != nil {
-		// try empty handle skip; Resolve only with real handle from Complete path
-	}
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -156,7 +147,6 @@ func (p *Provider) ListModels(ctx context.Context) ([]provider.ModelInfo, error)
 	if len(out) == 0 {
 		return p.desc.Models, nil
 	}
-	// cache into descriptor for subsequent Describe
 	p.desc.Models = out
 	return out, nil
 }
@@ -164,19 +154,26 @@ func (p *Provider) ListModels(ctx context.Context) ([]provider.ModelInfo, error)
 var _ provider.ModelCatalog = (*Provider)(nil)
 
 type chatReq struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-}
-
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Model      string           `json:"model"`
+	Messages   []map[string]any `json:"messages"`
+	Tools      []map[string]any `json:"tools,omitempty"`
+	ToolChoice any              `json:"tool_choice,omitempty"`
+	MaxTokens  int              `json:"max_tokens,omitempty"`
 }
 
 type chatResp struct {
 	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
+		FinishReason string `json:"finish_reason"`
+		Message      struct {
+			Content   string `json:"content"`
+			ToolCalls []struct {
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
 		} `json:"message"`
 	} `json:"choices"`
 	Usage struct {
@@ -196,14 +193,72 @@ func (p *Provider) Complete(ctx context.Context, req provider.CompletionRequest)
 	if model == "" {
 		model = "default"
 	}
-	msgs := make([]chatMessage, 0, len(req.Messages))
+	msgs := make([]map[string]any, 0, len(req.Messages))
 	for _, m := range req.Messages {
-		msgs = append(msgs, chatMessage{Role: m.Role, Content: m.Content})
+		msg := map[string]any{"role": m.Role}
+		if m.Content != "" || len(m.ToolCalls) == 0 {
+			msg["content"] = m.Content
+		}
+		if m.Name != "" {
+			msg["name"] = m.Name
+		}
+		if m.ToolCallID != "" {
+			msg["tool_call_id"] = m.ToolCallID
+		}
+		if len(m.ToolCalls) > 0 {
+			tcs := make([]map[string]any, 0, len(m.ToolCalls))
+			for _, tc := range m.ToolCalls {
+				tcs = append(tcs, map[string]any{
+					"id":   tc.ID,
+					"type": "function",
+					"function": map[string]any{
+						"name":      tc.Function.Name,
+						"arguments": tc.Function.Arguments,
+					},
+				})
+			}
+			msg["tool_calls"] = tcs
+			if m.Content == "" {
+				msg["content"] = nil
+			}
+		}
+		msgs = append(msgs, msg)
 	}
 	if len(msgs) == 0 {
-		msgs = []chatMessage{{Role: "user", Content: ""}}
+		msgs = []map[string]any{{"role": "user", "content": ""}}
 	}
-	body, _ := json.Marshal(chatReq{Model: model, Messages: msgs})
+
+	cr := chatReq{Model: model, Messages: msgs}
+	if req.MaxTokens > 0 {
+		cr.MaxTokens = req.MaxTokens
+	}
+	if len(req.Tools) > 0 {
+		tools := make([]map[string]any, 0, len(req.Tools))
+		for _, t := range req.Tools {
+			fn := map[string]any{
+				"name": t.Function.Name,
+			}
+			if t.Function.Description != "" {
+				fn["description"] = t.Function.Description
+			}
+			if t.Function.Parameters != nil {
+				fn["parameters"] = t.Function.Parameters
+			} else {
+				fn["parameters"] = map[string]any{"type": "object", "properties": map[string]any{}}
+			}
+			tools = append(tools, map[string]any{"type": "function", "function": fn})
+		}
+		cr.Tools = tools
+		choice := req.ToolChoice
+		if choice == "" {
+			choice = "auto"
+		}
+		if choice != "none" {
+			cr.ToolChoice = choice
+		}
+	}
+
+	body, _ := json.Marshal(cr)
 	url := p.chatURL()
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
@@ -224,26 +279,37 @@ func (p *Provider) Complete(ctx context.Context, req provider.CompletionRequest)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
-	var cr chatResp
-	_ = json.Unmarshal(raw, &cr)
+	var out chatResp
+	_ = json.Unmarshal(raw, &out)
 	if resp.StatusCode >= 300 {
 		msg := string(raw)
-		if cr.Error != nil && cr.Error.Message != "" {
-			msg = cr.Error.Message
+		if out.Error != nil && out.Error.Message != "" {
+			msg = out.Error.Message
 		}
 		return provider.CompletionResponse{}, fmt.Errorf("openai-compat http %d: %s", resp.StatusCode, msg)
 	}
 	content := ""
-	if len(cr.Choices) > 0 {
-		content = cr.Choices[0].Message.Content
+	var toolCalls []provider.ToolCall
+	finish := ""
+	if len(out.Choices) > 0 {
+		content = out.Choices[0].Message.Content
+		finish = out.Choices[0].FinishReason
+		for _, tc := range out.Choices[0].Message.ToolCalls {
+			call := provider.ToolCall{ID: tc.ID, Type: tc.Type}
+			call.Function.Name = tc.Function.Name
+			call.Function.Arguments = tc.Function.Arguments
+			toolCalls = append(toolCalls, call)
+		}
 	}
 	return provider.CompletionResponse{
-		ProviderID: p.ID(),
-		ModelID:    model,
-		Content:    content,
-		TokensIn:   cr.Usage.PromptTokens,
-		TokensOut:  cr.Usage.CompletionTokens,
-		CostUSD:    0,
+		ProviderID:   p.ID(),
+		ModelID:      model,
+		Content:      content,
+		ToolCalls:    toolCalls,
+		FinishReason: finish,
+		TokensIn:     out.Usage.PromptTokens,
+		TokensOut:    out.Usage.CompletionTokens,
+		CostUSD:      0,
 	}, nil
 }
 
