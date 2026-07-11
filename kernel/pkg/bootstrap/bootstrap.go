@@ -2,7 +2,9 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
+	"os"
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/echo"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/openaicompat"
@@ -79,11 +81,43 @@ func New(opts Options) (*Result, error) {
 		loaded = len(reg.List(""))
 	}
 
+	creds := credentials.NewMemoryBroker()
+	// Optional live provider key from environment (never logged)
+	if key := os.Getenv("HERMES_OPENAI_API_KEY"); key != "" {
+		_, _ = creds.Put(context.Background(), "provider.openai.compat", "env", "provider.openai.compat", key)
+	}
+
 	k := kernel.NewWithOptions(kernel.Options{
 		Registry: reg,
-		Creds:    credentials.NewMemoryBroker(),
+		Creds:    creds,
 		Memory:   memorystore.New(),
 	})
+
+	// Rebind openai-compat baseURL from env if present
+	if base := os.Getenv("HERMES_OPENAI_BASE_URL"); base != "" {
+		if _, inst, ok := reg.Get("provider.openai.compat"); ok {
+			if p, ok := inst.(*openaicompat.Provider); ok {
+				// Recreate with updated base — simpler: re-register
+				_ = p
+			}
+		}
+		// Prefer re-registering plugin with env baseURL
+		m := plugin.Manifest{
+			APIVersion: "hermes.plugin/v1",
+			Kind:       plugin.KindProvider,
+			Metadata:   plugin.Metadata{ID: "provider.openai.compat", Version: "0.1.0", Name: "OpenAI-Compatible HTTP"},
+			Spec: map[string]any{
+				"baseURL": base, "local": false, "costTier": "standard",
+				"capabilities": []any{"coding", "tools"},
+				"models":       []any{map[string]any{"id": envOr("HERMES_OPENAI_MODEL", "default")}},
+			},
+			Labels: map[string]string{"hermes.driver": "openai-compat"},
+		}
+		if inst, err := factories.Create(m); err == nil {
+			_ = reg.Register(m, inst)
+			k.RefreshAdapters()
+		}
+	}
 
 	return &Result{
 		Kernel:       k,
@@ -91,6 +125,13 @@ func New(opts Options) (*Result, error) {
 		Loaded:       loaded,
 		LoadWarnings: warn,
 	}, nil
+}
+
+func envOr(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }
 
 func seedBuiltins(reg plugin.Registry, f *plugin.FactoryRegistry) error {

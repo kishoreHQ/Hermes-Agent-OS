@@ -132,6 +132,7 @@ func NewWithOptions(opts Options) *Kernel {
 	k.Knowledge = knowledge.New()
 	k.MCP = mcpbridge.New(tools)
 	k.A2A = a2a.New()
+	k.A2A.SetRunner(k) // multi-agent: peer tasks become real missions
 	k.Remediate = remediation.New()
 	k.Deploy = deploy.New()
 	k.Docs = docgen.New()
@@ -427,10 +428,16 @@ func (k *Kernel) executeMission(
 		// Full always has runtime:execute in default scopes; keep guard for custom modes.
 	}
 
-	// Credential handle only (INV-07)
-	handle, err := k.creds.Put(ctx, string(decision.ProviderID), "mission", decision.ProviderID, "hermes-demo-token")
-	if err != nil {
-		return err
+	// Credential handle only (INV-07) — prefer operator/env key for provider
+	var handle credentials.Handle
+	if h, ok := k.creds.FindByPlugin(ctx, decision.ProviderID); ok {
+		handle = h
+	} else {
+		var err error
+		handle, err = k.creds.Put(ctx, string(decision.ProviderID), "mission", decision.ProviderID, "hermes-demo-token")
+		if err != nil {
+			return err
+		}
 	}
 	_ = k.bus.Publish(ctx, eventbus.Event{
 		Type: "credential.issued", MissionID: id,

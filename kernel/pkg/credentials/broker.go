@@ -34,6 +34,8 @@ type Broker interface {
 	Resolve(ctx context.Context, h Handle) (secret string, rec Record, err error)
 	// List returns metadata without secrets.
 	List(ctx context.Context) ([]Record, error)
+	// FindByPlugin returns a preferred handle for a plugin id.
+	FindByPlugin(ctx context.Context, pluginID types.PluginID) (Handle, bool)
 	// Revoke invalidates a handle.
 	Revoke(ctx context.Context, h Handle) error
 }
@@ -88,6 +90,25 @@ func (b *MemoryBroker) List(ctx context.Context) ([]Record, error) {
 		out = append(out, e.rec)
 	}
 	return out, nil
+}
+
+// FindByPlugin returns the first handle for a plugin (prefer env/operator keys over demos).
+func (b *MemoryBroker) FindByPlugin(ctx context.Context, pluginID types.PluginID) (Handle, bool) {
+	list, _ := b.List(ctx)
+	var demo Handle
+	for _, rec := range list {
+		if rec.PluginID != pluginID {
+			continue
+		}
+		if rec.Label != "mission" && rec.Label != "demo" {
+			return rec.Handle, true
+		}
+		demo = rec.Handle
+	}
+	if demo != "" {
+		return demo, true
+	}
+	return "", false
 }
 
 func (b *MemoryBroker) Revoke(ctx context.Context, h Handle) error {

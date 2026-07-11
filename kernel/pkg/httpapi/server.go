@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -49,7 +50,8 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/", spaFileServer(dist))
 	}
 
-	return withCORS(mux)
+	// Auth (optional) → CORS
+	return withCORS(withAuth(mux))
 }
 
 // ——— envelope ———
@@ -70,8 +72,14 @@ func writeErr(w http.ResponseWriter, status int, code, msg, remediation string) 
 
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		// When API token is required, echo Origin only if present; still allow * for local SPA.
+		// Production should put UI behind same origin or set HERMES_CORS_ORIGIN.
+		origin := os.Getenv("HERMES_CORS_ORIGIN")
+		if origin == "" {
+			origin = "*"
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Hermes-Token")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -351,24 +359,65 @@ func (s *Server) apiMemorySearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) apiCredentials(w http.ResponseWriter, r *http.Request) {
-	// Metadata only — never secrets (INV-07)
-	list, err := s.k.Creds().List(r.Context())
-	if err != nil {
-		writeErr(w, 500, "list_failed", err.Error(), "Retry.")
-		return
-	}
-	out := make([]map[string]any, 0, len(list))
-	for _, rec := range list {
-		out = append(out, map[string]any{
-			"handle":    string(rec.Handle),
-			"scope":     rec.Scope,
-			"label":     rec.Label,
-			"pluginId":  string(rec.PluginID),
-			"createdAt": rec.CreatedAt.UTC().Format(time.RFC3339Nano),
+	switch r.Method {
+	case http.MethodGet:
+		// Metadata only — never secrets (INV-07)
+		list, err := s.k.Creds().List(r.Context())
+		if err != nil {
+			writeErr(w, 500, "list_failed", err.Error(), "Retry.")
+			return
+		}
+		out := make([]map[string]any, 0, len(list))
+		for _, rec := range list {
+			out = append(out, map[string]any{
+				"handle":    string(rec.Handle),
+				"scope":     rec.Scope,
+				"label":     rec.Label,
+				"pluginId":  string(rec.PluginID),
+				"createdAt": rec.CreatedAt.UTC().Format(time.RFC3339Nano),
+			})
+		}
+		writeOK(w, out)
+	case http.MethodPost:
+		// Store secret, return handle only
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Scope    string `json:"scope"`
+			Label    string `json:"label"`
+			PluginID string `json:"pluginId"`
+			Secret   string `json:"secret"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeErr(w, 400, "bad_json", err.Error(), "")
+			return
+		}
+		if req.Secret == "" {
+			writeErr(w, 400, "bad_request", "secret required", "Send API key as secret; never log it")
+			return
+		}
+		if req.Label == "" {
+			req.Label = "api-key"
+		}
+		if req.Scope == "" {
+			req.Scope = req.PluginID
+		}
+		h, err := s.k.Creds().Put(r.Context(), req.Scope, req.Label, types.PluginID(req.PluginID), req.Secret)
+		if err != nil {
+			writeErr(w, 400, "put_failed", err.Error(), "")
+			return
+		}
+		// Never echo secret
+		writeOK(w, map[string]any{
+			"handle":   string(h),
+			"scope":    req.Scope,
+			"label":    req.Label,
+			"pluginId": req.PluginID,
 		})
+	default:
+		writeErr(w, 405, "method", "GET or POST", "")
 	}
-	writeOK(w, out)
 }
+
 
 func missionJSON(m host.Mission) map[string]any {
 	caps := make([]string, 0, len(m.RequiredCaps))

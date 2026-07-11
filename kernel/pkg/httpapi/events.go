@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -37,9 +38,14 @@ func (s *Server) apiEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// WebSocket live + catch-up
+	// InsecureSkipVerify: accept non-browser clients; OriginPatterns from env or *
+	origins := []string{"*"}
+	if o := os.Getenv("HERMES_WS_ORIGINS"); o != "" {
+		origins = strings.Split(o, ",")
+	}
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-		OriginPatterns:     []string{"*"},
+		InsecureSkipVerify: true, // required for non-browser; pair with HERMES_API_TOKEN
+		OriginPatterns:     origins,
 	})
 	if err != nil {
 		return

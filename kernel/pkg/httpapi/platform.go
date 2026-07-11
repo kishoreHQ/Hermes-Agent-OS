@@ -238,7 +238,7 @@ func (s *Server) apiA2ATasks(w http.ResponseWriter, r *http.Request) {
 			Goal   string `json:"goal"`
 		}
 		_ = json.Unmarshal(body, &req)
-		t, err := s.k.A2A.OfferTask(types.PluginID(req.PeerID), req.Goal)
+		t, err := s.k.A2A.OfferTaskCtx(r.Context(), types.PluginID(req.PeerID), req.Goal)
 		if err != nil {
 			writeErr(w, 400, "bad_request", err.Error(), "")
 			return
