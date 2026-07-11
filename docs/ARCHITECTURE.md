@@ -116,12 +116,15 @@ Hosts (Mission Control, CLI, bots) talk only through:
 
 | Concern | Contract |
 |---------|----------|
-| Submit / cancel missions | `host.Interface` |
-| Event stream | monotonic `seq`, typed events |
-| Health | liveness for process & plugins |
-| HTTP surface (planned) | `/api/v1/*` aligned with AESP Host API patterns |
+| Submit / cancel / list / get missions | `host.Interface` + `/api/v1/missions` |
+| Event stream | monotonic `seq`; JSON catch-up + WebSocket `/api/v1/events` |
+| Replay | `/api/v1/replay/{id}` · `/api/v1/missions/{id}/events` |
+| Registry | `/api/v1/registry/{providers\|runtimes\|tools}` |
+| Health | `/api/v1/health` |
+| Envelope | `{ "data": …, "error": null \| {code,message,remediation} }` |
 
-UI never imports kernel packages. UI binds to HTTP/WS only.
+UI never imports kernel packages. UI binds to HTTP/WS only.  
+OpenAPI: `schemas/openapi-host-v1.yaml`.
 
 ---
 

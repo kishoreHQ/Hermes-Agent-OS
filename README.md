@@ -41,17 +41,34 @@ Full list: [docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
 ## Quick start
 
 ```bash
-# Kernel unit tests
+# Unit tests
 make test
 
 # Build hermesd
 make build
 
-# Run foundation binary
-./bin/hermesd
+# Status
+./bin/hermesd status
+
+# Serve Host API (default :8080)
+make serve
+# or: ./bin/hermesd serve :8080
+
+# Smoke
+make smoke
+```
+
+```bash
+curl -s localhost:8080/api/v1/health
+curl -s -X POST localhost:8080/api/v1/missions \
+  -H 'Content-Type: application/json' \
+  -d '{"goal":"hello","requiredCapabilities":["coding"]}'
+curl -s 'localhost:8080/api/v1/events?since=0&format=json'
 ```
 
 Requirements: Go 1.22+.
+
+Host OpenAPI: [`schemas/openapi-host-v1.yaml`](./schemas/openapi-host-v1.yaml).
 
 ## Layout
 
@@ -79,10 +96,14 @@ scripts/             # Dev helpers
 
 ## Status
 
-**H0 — Product foundation.** Kernel contracts and ADRs are in place.  
-Full Host API, Mission Control re-home, and multi-provider proofs are planned in [docs/PLAN.md](./docs/PLAN.md).
+| Phase | State |
+|-------|--------|
+| **H0** Product foundation | Done |
+| **H1** Host API `/api/v1` + events | Done (core surface) |
+| **H2** Plugin loader + real adapters | Next |
+| **H3** Mission Control re-home | Planned |
 
-Working Agent OS + Mission Control prototypes currently also live in AESP-Reference-Implementation until Hermes reaches parity (deliberate migration, not abandonment).
+Working Agent OS + Mission Control prototypes currently also live in AESP-Reference-Implementation until Hermes reaches full product parity (deliberate migration, not abandonment).
 
 ## License
 

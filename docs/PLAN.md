@@ -31,14 +31,16 @@
 - [x] ADR-0001…0005  
 - [x] Kernel contracts + skeleton  
 - [x] Makefile / README / LICENSE  
-- [ ] First tagged release `v0.0.1-foundation`  
+- [x] First tagged foundation on `master` (`85213e7`)  
 
 ### Phase H1 — Host API parity
 
-- Port Host HTTP `/api/v1` + WS event `seq` from AESP-RI patterns into Hermes kernel  
-- Mission submit/cancel/list; event journal; health  
-- OpenAPI/schema under `schemas/`  
-- Conformance harness that validates Hermes against AESP Host expectations  
+- [x] Host HTTP `/api/v1` + event `seq` (JSON catch-up + WebSocket)  
+- [x] Mission submit/cancel/list/get; event journal; health  
+- [x] Registry: providers / runtimes / tools from plugin registry  
+- [x] OpenAPI under `schemas/openapi-host-v1.yaml`  
+- [x] `hermesd serve`, `make smoke`  
+- [ ] Conformance harness that validates Hermes against full AESP Host expectations (H1.1)  
 
 ### Phase H2 — Plugin runtime
 

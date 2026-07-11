@@ -1,0 +1,173 @@
+openapi: 3.0.3
+info:
+  title: Hermes Agent OS Host API
+  version: 0.1.0
+  description: |
+    Host Interface for Hermes Agent OS (INV-11).
+    Aligned with AESP host UI patterns: `/api/v1/*` and `{data,error}` envelope.
+    Product surface — protocol schemas remain upstream in AESP.
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local hermesd
+paths:
+  /api/v1/health:
+    get:
+      summary: Kernel health
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /api/v1/missions:
+    get:
+      summary: List missions
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [queued, running, succeeded, failed, cancelled, awaiting_approval]
+      responses:
+        "200":
+          description: Mission list
+    post:
+      summary: Submit mission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [goal, requiredCapabilities]
+              properties:
+                name:
+                  type: string
+                goal:
+                  type: string
+                requiredCapabilities:
+                  type: array
+                  items:
+                    type: string
+                  description: Declarative capabilities — never model names
+                labels:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        "200":
+          description: Created mission
+        "400":
+          description: Invalid request
+  /api/v1/missions/{id}:
+    get:
+      summary: Get mission
+      parameters:
+        - $ref: "#/components/parameters/MissionId"
+      responses:
+        "200":
+          description: Mission
+        "404":
+          description: Not found
+  /api/v1/missions/{id}/cancel:
+    post:
+      summary: Cancel mission
+      parameters:
+        - $ref: "#/components/parameters/MissionId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Cancelled
+  /api/v1/missions/{id}/events:
+    get:
+      summary: Mission event timeline
+      parameters:
+        - $ref: "#/components/parameters/MissionId"
+      responses:
+        "200":
+          description: Events
+  /api/v1/events:
+    get:
+      summary: Event journal (JSON catch-up or WebSocket live)
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: integer
+            format: int64
+          description: Return events with seq > since
+        - name: mission
+          in: query
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json]
+      responses:
+        "200":
+          description: JSON event list when format=json
+  /api/v1/replay/{id}:
+    get:
+      summary: Replay mission events
+      parameters:
+        - $ref: "#/components/parameters/MissionId"
+      responses:
+        "200":
+          description: Replay bundle
+  /api/v1/registry/{kind}:
+    get:
+      summary: List registered plugins by kind
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [providers, runtimes, tools, agents]
+      responses:
+        "200":
+          description: Registry items
+  /api/v1/plugins:
+    get:
+      summary: List all plugins
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Plugin manifests
+components:
+  parameters:
+    MissionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    Envelope:
+      type: object
+      properties:
+        data: {}
+        error:
+          type: object
+          nullable: true
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            remediation:
+              type: string
