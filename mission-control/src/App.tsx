@@ -13,6 +13,7 @@ import { SessionsPage } from '@/pages/SessionsPage'
 import { BoardPage } from '@/pages/BoardPage'
 import { RoutinesPage } from '@/pages/RoutinesPage'
 import { ToolsPage } from '@/pages/ToolsPage'
+import { ProvidersPage } from '@/pages/ProvidersPage'
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="sessions" element={<SessionsPage />} />
             <Route path="board" element={<BoardPage />} />
             <Route path="routines" element={<RoutinesPage />} />
+            <Route path="providers" element={<ProvidersPage />} />
             <Route path="fleet" element={<FleetPage />} />
             <Route path="tools" element={<ToolsPage />} />
             <Route path="memory" element={<MemoryPage />} />

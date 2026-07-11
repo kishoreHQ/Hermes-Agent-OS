@@ -35,6 +35,19 @@ func (r *MemoryRegistry) Register(m Manifest, instance any) error {
 	return nil
 }
 
+func (r *MemoryRegistry) Unregister(id types.PluginID) error {
+	if id == "" {
+		return fmt.Errorf("plugin id required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.byID[id]; !ok {
+		return fmt.Errorf("unknown plugin %s", id)
+	}
+	delete(r.byID, id)
+	return nil
+}
+
 func (r *MemoryRegistry) Get(id types.PluginID) (Manifest, any, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

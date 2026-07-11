@@ -51,6 +51,55 @@ GET /api/v1/providers/{id}/models
 
 OpenAI-compatible providers call `GET {baseURL}/models` when healthy. Echo providers return static manifest models.
 
+## UI: add / delete providers
+
+Mission Control → **Providers**:
+
+1. Pick a **template** (OpenAI, Groq, OpenRouter, Ollama, …) or **Custom**.  
+2. Edit **base URL** / **default model** if needed.  
+3. Paste **API key** (stored as credential handle — never returned).  
+4. **Add provider** → registered live for routing/failover.  
+5. **Delete** only works for UI-managed providers (bootstrap seeds are protected).
+
+### Host API
+
+```http
+GET  /api/v1/provider-templates
+GET  /api/v1/provider-configs
+POST /api/v1/provider-configs
+PUT  /api/v1/provider-configs/{id}
+DELETE /api/v1/provider-configs/{id}
+```
+
+```bash
+# Add OpenAI from template
+curl -s -X POST localhost:8080/api/v1/provider-configs \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "fromTemplate":"openai",
+    "apiKey":"sk-…",
+    "defaultModel":"gpt-4o-mini"
+  }'
+
+# Custom endpoint
+curl -s -X POST localhost:8080/api/v1/provider-configs \
+  -d '{"fromTemplate":"custom","name":"My GW","baseUrl":"https://gw.example/v1","apiKey":"…"}'
+
+# Delete
+curl -s -X DELETE localhost:8080/api/v1/provider-configs/provider.ui.openai
+```
+
+Popular templates (OpenAI-compatible base URLs):
+
+| Category | Templates |
+|----------|-----------|
+| Cloud | OpenAI, Groq, Together, Fireworks, DeepSeek, Mistral, xAI, Gemini, Azure OpenAI, Perplexity, Cerebras, SambaNova, Hugging Face, Cloudflare Workers AI, NVIDIA NIM, Moonshot, Qwen |
+| Gateway | OpenRouter, Anthropic-via-OpenRouter, LiteLLM |
+| Local | Ollama, LM Studio, vLLM, LocalAI, Echo (test) |
+| Custom | Any Chat Completions endpoint |
+
+Native Anthropic Messages / Google GenAI plugins are future work — use OpenRouter or OpenAI-compat endpoints today.
+
 ## Live multi-provider setup
 
 ```bash

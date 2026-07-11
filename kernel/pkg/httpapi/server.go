@@ -17,7 +17,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
-const Version = "hermesd-host/0.8.0"
+const Version = "hermesd-host/0.9.0"
 
 // Server is the Host HTTP surface.
 type Server struct {
@@ -44,6 +44,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/policies", s.apiPolicies)
 	s.registerDeckRoutes(mux)
 	s.registerPlatformRoutes(mux)
+	s.registerProviderMgmtRoutes(mux)
 
 	// Mission Control SPA when mission-control/dist exists (H3 / GAP-UI-002 parity)
 	if dist := uiDistPath(); dist != "" {

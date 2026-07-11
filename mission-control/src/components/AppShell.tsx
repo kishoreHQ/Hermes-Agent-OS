@@ -10,6 +10,7 @@ const nav = [
   { to: '/sessions', label: 'Sessions' },
   { to: '/board', label: 'Board' },
   { to: '/routines', label: 'Routines' },
+  { to: '/providers', label: 'Providers' },
   { to: '/fleet', label: 'Fleet' },
   { to: '/tools', label: 'Tools' },
   { to: '/memory', label: 'Memory' },

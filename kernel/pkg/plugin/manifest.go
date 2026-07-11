@@ -40,6 +40,8 @@ type Metadata struct {
 // Registry is a dynamic plugin registry. Zero vendor names in core.
 type Registry interface {
 	Register(m Manifest, instance any) error
+	// Unregister removes a plugin by id (UI-managed providers/runtimes).
+	Unregister(id types.PluginID) error
 	Get(id types.PluginID) (Manifest, any, bool)
 	List(kind Kind) []Manifest
 }

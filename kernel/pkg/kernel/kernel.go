@@ -29,6 +29,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/plugin"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/policy"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/provider"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/providercfg"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/remediation"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/router"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/runtime"
@@ -67,6 +68,8 @@ type Kernel struct {
 	Remediate *remediation.Engine
 	Deploy    *deploy.Service
 	Docs      *docgen.Generator
+	// ProviderMgr UI-managed providers (add/delete/templates)
+	ProviderMgr *providercfg.Manager
 
 	// Live instances collected from registry (refreshed on demand)
 	providers []provider.Provider
@@ -137,7 +140,9 @@ func NewWithOptions(opts Options) *Kernel {
 	k.Remediate = remediation.New()
 	k.Deploy = deploy.New()
 	k.Docs = docgen.New()
+	k.ProviderMgr = providercfg.NewManager(reg, creds, func() { k.RefreshAdapters() })
 	k.refreshAdapters()
+	k.ProviderMgr.SyncFromRegistry()
 	return k
 }
 
