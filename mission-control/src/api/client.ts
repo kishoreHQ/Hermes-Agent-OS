@@ -71,6 +71,59 @@ export const api = {
   },
 
   credentials: () => request<CredentialMeta[]>('/api/v1/credentials'),
+
+  // Command Deck (H3.1)
+  probeConnections: () => request<Record<string, unknown>[]>('/api/v1/connections/probe'),
+  listConnections: () => request<Record<string, unknown>[]>('/api/v1/connections'),
+  registerConnection: (body: { pluginId: string; kind?: string; name?: string }) =>
+    request<Record<string, unknown>>('/api/v1/connections', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  listSessions: () => request<Record<string, unknown>[]>('/api/v1/sessions'),
+  createSession: (body: { runtime?: string; provider?: string }) =>
+    request<Record<string, unknown>>('/api/v1/sessions', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  sessionMessage: (id: string, text: string) =>
+    request<Record<string, unknown>>(`/api/v1/sessions/${encodeURIComponent(id)}/message`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
+  listBoards: () => request<Record<string, unknown>[]>('/api/v1/boards'),
+  listTasks: () => request<Record<string, unknown>[]>('/api/v1/tasks'),
+  createTask: (body: { title: string; column?: string; capabilities?: string[] }) =>
+    request<Record<string, unknown>>('/api/v1/tasks', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  claimTask: (id: string, assignee = 'operator') =>
+    request<Record<string, unknown>>(`/api/v1/tasks/${encodeURIComponent(id)}/claim`, {
+      method: 'POST',
+      body: JSON.stringify({ assignee }),
+    }),
+  moveTask: (id: string, column: string) =>
+    request<Record<string, unknown>>(`/api/v1/tasks/${encodeURIComponent(id)}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ column }),
+    }),
+
+  listRoutines: () => request<Record<string, unknown>[]>('/api/v1/routines'),
+  fireRoutine: (id: string) =>
+    request<Record<string, unknown>>(`/api/v1/routines/${encodeURIComponent(id)}/fire`, {
+      method: 'POST',
+    }),
+
+  listTools: () => request<Record<string, unknown>[]>('/api/v1/tools'),
+  invokeTool: (id: string, input: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/api/v1/tools/${encodeURIComponent(id)}/invoke`, {
+      method: 'POST',
+      body: JSON.stringify({ input }),
+    }),
+  toolInvocations: () => request<Record<string, unknown>[]>('/api/v1/tools/invocations'),
 }
 
 /** WebSocket URL for live events (same origin in prod; vite proxy in dev). */

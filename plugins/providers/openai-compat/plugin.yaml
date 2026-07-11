@@ -1,0 +1,21 @@
+apiVersion: hermes.plugin/v1
+kind: provider
+metadata:
+  id: provider.openai.compat
+  version: 0.1.0
+  name: OpenAI-Compatible HTTP
+spec:
+  # Any OpenAI Chat Completions compatible server (Ollama, LM Studio, vLLM, cloud gateways).
+  baseURL: http://127.0.0.1:11434/v1
+  local: true
+  costTier: free-local
+  capabilities:
+    - coding
+    - tools
+  models:
+    - id: default
+      capabilities: [coding, tools]
+      costTier: free-local
+labels:
+  hermes.driver: openai-compat
+  hermes.example: "false"

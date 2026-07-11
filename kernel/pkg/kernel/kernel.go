@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/echo"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/openaicompat"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/steps"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/capability"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/credentials"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/deck"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/eventbus"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/host"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/memorystore"
@@ -21,6 +23,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/router"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/runtime"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/security"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/toolrouter"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
@@ -34,6 +37,13 @@ type Kernel struct {
 	memory   memorystore.Store
 	policy   policy.Policy
 	missions map[types.MissionID]*host.Mission
+	tools    *toolrouter.Router
+
+	// Command Deck services (H3.1)
+	Connections *deck.ConnectionsService
+	Sessions    *deck.SessionsService
+	Board       *deck.BoardService
+	Routines    *deck.RoutinesService
 
 	// Live instances collected from registry (refreshed on demand)
 	providers []provider.Provider
@@ -47,6 +57,7 @@ type Options struct {
 	Creds    credentials.Broker
 	Memory   memorystore.Store
 	Policy   *policy.Policy
+	Tools    *toolrouter.Router
 }
 
 func New(reg plugin.Registry) *Kernel {
@@ -74,6 +85,10 @@ func NewWithOptions(opts Options) *Kernel {
 	if opts.Policy != nil {
 		pol = *opts.Policy
 	}
+	tools := opts.Tools
+	if tools == nil {
+		tools = toolrouter.New()
+	}
 	k := &Kernel{
 		plugins:  reg,
 		bus:      bus,
@@ -81,8 +96,13 @@ func NewWithOptions(opts Options) *Kernel {
 		creds:    creds,
 		memory:   mem,
 		policy:   pol,
+		tools:    tools,
 		missions: map[types.MissionID]*host.Mission{},
 	}
+	k.Connections = deck.NewConnections(reg)
+	k.Sessions = deck.NewSessions(k)
+	k.Board = deck.NewBoard()
+	k.Routines = deck.NewRoutines(k)
 	k.refreshAdapters()
 	return k
 }
@@ -92,6 +112,7 @@ func (k *Kernel) Bus() eventbus.Bus         { return k.bus }
 func (k *Kernel) Creds() credentials.Broker { return k.creds }
 func (k *Kernel) Memory() memorystore.Store { return k.memory }
 func (k *Kernel) Policy() policy.Policy     { return k.policy }
+func (k *Kernel) Tools() *toolrouter.Router { return k.tools }
 
 // RefreshAdapters re-reads provider/runtime instances from the plugin registry.
 func (k *Kernel) RefreshAdapters() {
@@ -115,6 +136,13 @@ func (k *Kernel) refreshAdaptersLocked() {
 			continue
 		}
 		if p, ok := inst.(provider.Provider); ok {
+			// Wire credential resolve for OpenAI-compatible providers
+			if oc, ok := p.(*openaicompat.Provider); ok {
+				oc.Resolve = func(ctx context.Context, handle string) (string, error) {
+					sec, _, err := k.creds.Resolve(ctx, credentials.Handle(handle))
+					return sec, err
+				}
+			}
 			k.providers = append(k.providers, p)
 		}
 	}
@@ -393,7 +421,7 @@ func (k *Kernel) executeMission(
 		Credentials: []map[string]any{
 			{"handle": string(handle), "scope": string(decision.ProviderID)},
 		},
-		Tools:  []map[string]any{{"id": "echo", "name": "echo"}},
+		Tools:  k.toolMaps(),
 		Budget: map[string]any{"maxSteps": k.policy.MaxSteps, "maxCostUsd": k.policy.MaxCostUSD},
 		Security: map[string]any{
 			"sandbox": rtDesc.SandboxTier,
@@ -594,6 +622,18 @@ func capsStrings(in []types.Capability) []string {
 	out := make([]string, len(in))
 	for i, c := range in {
 		out[i] = string(c)
+	}
+	return out
+}
+
+func (k *Kernel) toolMaps() []map[string]any {
+	if k.tools == nil {
+		return []map[string]any{{"id": "echo", "name": "echo"}}
+	}
+	list := k.tools.List()
+	out := make([]map[string]any, 0, len(list))
+	for _, t := range list {
+		out = append(out, map[string]any{"id": t.ID, "name": t.Name, "description": t.Description})
 	}
 	return out
 }

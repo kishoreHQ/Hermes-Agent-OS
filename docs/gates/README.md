@@ -11,6 +11,8 @@ Product acceptance gates for Hermes-Agent-OS.
 | H4 | Interchangeability proof (`make prove-h4`) | **PASS** |
 | H5 | Production hardening (`make prove-h5`) | **PASS** |
 | H1.1 | AESP hermes-core conformance (`make conform`) | **PASS** |
+| H3.1 | Command Deck Host API + UI | **PASS** |
+| GAP | INT-TOOLS closed | **PASS** |
 
 **H1 demo checklist**
 

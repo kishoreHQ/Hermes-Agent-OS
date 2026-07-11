@@ -111,6 +111,9 @@ scripts/             # Dev helpers
 | **H3** Mission Control re-home | Done (core host surfaces) |
 | **H4** Interchangeability proof | Done (`make prove-h4`) |
 | **H5** Production hardening | Done (`make prove-h5`) |
+| **H1.1** AESP hermes-core claim | Done (`make conform`) |
+| **H3.1** Command Deck | Done |
+| **Provider** OpenAI-compatible | Done (`provider.openai.compat`) |
 
 Working Agent OS + Mission Control prototypes currently also live in AESP-Reference-Implementation until Hermes reaches full product parity (deliberate migration, not abandonment).
 

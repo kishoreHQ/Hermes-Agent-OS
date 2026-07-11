@@ -16,7 +16,7 @@ import (
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/types"
 )
 
-const Version = "hermesd-host/0.5.0"
+const Version = "hermesd-host/0.6.0"
 
 // Server is the Host HTTP surface.
 type Server struct {
@@ -41,6 +41,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/credentials", s.apiCredentials)
 	mux.HandleFunc("/api/v1/security/posture", s.apiSecurityPosture)
 	mux.HandleFunc("/api/v1/policies", s.apiPolicies)
+	s.registerDeckRoutes(mux)
 
 	// Mission Control SPA when mission-control/dist exists (H3 / GAP-UI-002 parity)
 	if dist := uiDistPath(); dist != "" {
@@ -240,6 +241,14 @@ func (s *Server) apiRegistry(w http.ResponseWriter, r *http.Request) {
 			items = append(items, manifestJSON(m, "runtime"))
 		}
 	case "tools":
+		if s.k.Tools() != nil {
+			for _, t := range s.k.Tools().List() {
+				items = append(items, map[string]any{
+					"id": t.ID, "name": t.Name, "kind": "tool", "enabled": t.Enabled,
+					"description": t.Description,
+				})
+			}
+		}
 		for _, m := range s.k.Plugins().List(plugin.KindTool) {
 			items = append(items, manifestJSON(m, "tool"))
 		}

@@ -44,6 +44,7 @@ func Checks() map[string]CheckFunc {
 		"hitl.assist":             checkHITLAssist,
 		"int.providers":           checkProviders,
 		"int.runtimes":            checkRuntimes,
+		"int.tools":               checkTools,
 		"inv.provider_ne_runtime": checkProviderNeRuntime,
 		"inv.plugins":             checkPlugins,
 		"inv.capability_route":    checkCapabilityRoute,
@@ -221,6 +222,20 @@ func checkRuntimes(ctx context.Context, k *kernel.Kernel) CheckResult {
 		return fail("int.runtimes", "no runtimes")
 	}
 	return pass("int.runtimes", fmt.Sprintf("n=%d first=%s", len(list), list[0].Metadata.ID))
+}
+
+func checkTools(ctx context.Context, k *kernel.Kernel) CheckResult {
+	if k.Tools() == nil || len(k.Tools().List()) < 1 {
+		return fail("int.tools", "no tools")
+	}
+	inv, err := k.Tools().Invoke(ctx, "echo", "conf", "runtime.example.echo", map[string]any{"text": "tool-ok"})
+	if err != nil || inv.Status != "ok" || inv.Output != "tool-ok" {
+		return fail("int.tools", fmt.Sprintf("%+v %v", inv, err))
+	}
+	if len(k.Tools().Invocations(5)) < 1 {
+		return fail("int.tools", "no invocation record")
+	}
+	return pass("int.tools", "invoke+audit ok")
 }
 
 func checkProviderNeRuntime(ctx context.Context, k *kernel.Kernel) CheckResult {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/echo"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/openaicompat"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/adapters/steps"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/credentials"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/kernel"
@@ -23,12 +24,14 @@ func DefaultFactories() *plugin.FactoryRegistry {
 	f.Register("echo-provider", echo.ProviderFactory)
 	f.Register("echo-runtime", echo.RuntimeFactory)
 	f.Register("steps-runtime", steps.RuntimeFactory)
+	f.Register("openai-compat", openaicompat.ProviderFactory)
 	f.Register("memory-ephemeral", memoryFactory)
 	// Id aliases
 	f.Register("provider.example.echo", echo.ProviderFactory)
 	f.Register("runtime.example.echo", echo.RuntimeFactory)
 	f.Register("provider.example.budget", echo.ProviderFactory)
 	f.Register("runtime.example.steps", steps.RuntimeFactory)
+	f.Register("provider.openai.compat", openaicompat.ProviderFactory)
 	f.Register("memory.example.ephemeral", memoryFactory)
 	return f
 }

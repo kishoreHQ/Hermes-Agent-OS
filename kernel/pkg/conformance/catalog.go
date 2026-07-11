@@ -34,8 +34,8 @@ type Profile struct {
 
 // ImplementationVersion for claim reports.
 const (
-	ImplementationVersion = "hermesd-host/0.5.0"
-	SuiteVersion          = "hermes-conformance/1.0.0"
+	ImplementationVersion = "hermesd-host/0.6.0"
+	SuiteVersion          = "hermes-conformance/1.1.0"
 	ClaimProfile          = "aesp.profile.hermes-core"
 )
 
@@ -63,7 +63,7 @@ func Catalog() []Item {
 		{ID: "HITL-NO-AUTO", Spec: "AESP-0014", Title: "HITL: assist external awaits approval (no auto-approve)", Status: StatusPartial, Module: "pkg/security+pkg/kernel", Profile: "mission-control", CheckID: "hitl.assist", Notes: "Awaiting-approval state; full HITL task API deferred"},
 		{ID: "INT-PROVIDER", Spec: "AESP-0015", Title: "Provider registry capability advertisement", Status: StatusImplemented, Module: "pkg/plugin+pkg/provider", Profile: "hermes-agent-os", CheckID: "int.providers"},
 		{ID: "INT-RUNTIME", Spec: "AESP-0015", Title: "Runtime registry discovery", Status: StatusImplemented, Module: "pkg/plugin+pkg/runtime", Profile: "hermes-agent-os", CheckID: "int.runtimes"},
-		{ID: "INT-TOOLS", Spec: "AESP-0015", Title: "Unified tool router + invocation records", Status: StatusGap, Module: "", Profile: "hermes-agent-os"},
+		{ID: "INT-TOOLS", Spec: "AESP-0015", Title: "Unified tool router + invocation records", Status: StatusImplemented, Module: "pkg/toolrouter", Profile: "hermes-agent-os", CheckID: "int.tools"},
 		{ID: "INT-PLAN", Spec: "AESP-0015", Title: "Versioned plan artifacts", Status: StatusGap, Module: "", Profile: "hermes-agent-os"},
 		{ID: "INT-MCP", Spec: "AESP-0015", Title: "MCP-aligned tool server/client", Status: StatusGap, Module: "", Profile: "hermes-agent-os"},
 		{ID: "INT-A2A", Spec: "AESP-0015", Title: "A2A peer registry", Status: StatusGap, Module: "", Profile: "hermes-agent-os"},
@@ -89,7 +89,7 @@ func Profiles() []Profile {
 			Description: "Executable host + plugins + capability routing + memory + credentials + journal. Subset of hermes-agent-os.",
 			ItemIDs: []string{
 				"CORE-WORKUNIT", "CORE-EVENTS", "MEM-UNIFIED", "TEST-EVAL", "OBS-EVENTS",
-				"SEC-POLICY", "HITL-NO-AUTO", "INT-PROVIDER", "INT-RUNTIME",
+				"SEC-POLICY", "HITL-NO-AUTO", "INT-PROVIDER", "INT-RUNTIME", "INT-TOOLS",
 				"INV-01", "INV-02", "INV-03", "INV-05", "INV-06", "INV-07", "INV-10", "INV-11",
 			},
 		},
@@ -106,6 +106,8 @@ func Profiles() []Profile {
 		},
 	}
 }
+
+// Note: INT-TOOLS closed in H3.1 via pkg/toolrouter.
 
 // ItemByID finds a catalog item.
 func ItemByID(id string) (Item, bool) {

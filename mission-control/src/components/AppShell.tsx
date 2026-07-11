@@ -6,7 +6,12 @@ import { cn } from '@/lib/cn'
 const nav = [
   { to: '/', label: 'Overview', end: true },
   { to: '/missions', label: 'Missions' },
+  { to: '/connect', label: 'Connect' },
+  { to: '/sessions', label: 'Sessions' },
+  { to: '/board', label: 'Board' },
+  { to: '/routines', label: 'Routines' },
   { to: '/fleet', label: 'Fleet' },
+  { to: '/tools', label: 'Tools' },
   { to: '/memory', label: 'Memory' },
   { to: '/events', label: 'Events' },
   { to: '/credentials', label: 'Credentials' },

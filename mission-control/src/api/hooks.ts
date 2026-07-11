@@ -90,3 +90,22 @@ export function useCredentials() {
     refetchInterval: 8000,
   })
 }
+
+export function useProbe() {
+  return useQuery({ queryKey: ['probe'], queryFn: api.probeConnections, refetchInterval: 15000 })
+}
+export function useConnections() {
+  return useQuery({ queryKey: ['connections'], queryFn: api.listConnections, refetchInterval: 5000 })
+}
+export function useSessions() {
+  return useQuery({ queryKey: ['sessions'], queryFn: api.listSessions, refetchInterval: 3000 })
+}
+export function useBoards() {
+  return useQuery({ queryKey: ['boards'], queryFn: api.listBoards, refetchInterval: 4000 })
+}
+export function useRoutines() {
+  return useQuery({ queryKey: ['routines'], queryFn: api.listRoutines, refetchInterval: 5000 })
+}
+export function useTools() {
+  return useQuery({ queryKey: ['tools'], queryFn: api.listTools, refetchInterval: 10000 })
+}

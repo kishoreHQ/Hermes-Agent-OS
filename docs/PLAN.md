@@ -59,7 +59,9 @@
 - [x] Bind exclusively to Hermes Host API (no vendor SDKs, no kernel imports)  
 - [x] Cherenkov ops aesthetic (overview, missions, fleet, memory, events, credentials)  
 - [x] Vite proxy + `hermesd` SPA serve (`mission-control/dist`)  
-- [ ] Port full Command Deck (connections/board/routines) when Host API grows (H3.1)  
+- [x] **H3.1** Command Deck: connections, sessions, board, routines + UI  
+- [x] OpenAI-compatible provider plugin (`provider.openai.compat`)  
+- [x] INT-TOOLS catalog gap closed (`pkg/toolrouter`)  
 
 ### Phase H4 — Interchangeability proof
 
