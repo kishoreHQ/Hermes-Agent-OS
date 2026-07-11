@@ -10,6 +10,7 @@ Product acceptance gates for Hermes-Agent-OS.
 | H3 | Mission Control against Hermes Host API | **PASS** (core host surfaces) |
 | H4 | Interchangeability proof (`make prove-h4`) | **PASS** |
 | H5 | Production hardening (`make prove-h5`) | **PASS** |
+| H1.1 | AESP hermes-core conformance (`make conform`) | **PASS** |
 
 **H1 demo checklist**
 
@@ -50,5 +51,13 @@ Product acceptance gates for Hermes-Agent-OS.
 3. Assist + `security.externalAction=true` → `awaiting_approval`  
 4. `GET /api/v1/security/posture` documents modes, scopes, signing env  
 5. Credentials API still returns handles only  
+
+**H1.1 demo checklist**
+
+1. `make conform` → RESULT PASS for `aesp.profile.hermes-core`  
+2. Report lists implementation + suite + profile versions  
+3. Executable checks all PASS  
+4. `make conform-full` shows remaining gaps (not a silent green)  
+5. Catalog has no invalid/missing status values  
 
 AESP-RI GATE-1…9 remain authoritative for the reference monorepo until Hermes owns those demos.

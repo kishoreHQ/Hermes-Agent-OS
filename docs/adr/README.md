@@ -13,6 +13,7 @@
 | [0009](./0009-interchangeability.md) | Interchangeability of providers and runtimes | Accepted |
 | [0010](./0010-monorepo-retention.md) | Retain product monorepo through H5 | Accepted |
 | [0011](./0011-security-modes.md) | Agent modes, scopes, sandbox, signed plugins | Accepted |
+| [0012](./0012-aesp-conformance-claim.md) | AESP conformance claim for Hermes product | Accepted |
 
 Process: propose → challenge (reviewer personas) → accept/reject → implement.  
 Superseding an ADR requires a new ADR that links the old one.

@@ -1,4 +1,4 @@
-.PHONY: test build run serve status clean fmt vet lint help smoke prove-h4 prove-h5 bench ui-install ui-build ui-dev ui-typecheck dev
+.PHONY: test build run serve status clean fmt vet lint help smoke prove-h4 prove-h5 conform bench ui-install ui-build ui-dev ui-typecheck dev
 
 KERNEL_DIR := kernel
 UI_DIR := mission-control
@@ -61,6 +61,12 @@ prove-h4: build ## H4 interchangeability proof (2×2 provider×runtime)
 
 prove-h5: build ## H5 production hardening proof
 	./$(HERMESD) prove-h5
+
+conform: build ## AESP hermes-core conformance claim
+	./$(HERMESD) conform
+
+conform-full: build ## AESP hermes-agent-os profile (expects gaps)
+	./$(HERMESD) conform full
 
 bench: ## Go benchmarks for mission path
 	cd $(KERNEL_DIR) && go test ./pkg/perf/ -bench=. -benchmem -count=1

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/bootstrap"
+	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/conformance"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/hardening"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/httpapi"
 	"github.com/kishoreHQ/Hermes-Agent-OS/kernel/pkg/interchange"
@@ -24,6 +25,7 @@ func main() {
 		fmt.Println("  serve [addr]        Host API (default :8080)")
 		fmt.Println("  prove-h4            interchangeability proof (H4)")
 		fmt.Println("  prove-h5            production hardening proof (H5)")
+		fmt.Println("  conform [profile]   AESP conformance (default hermes-core)")
 		os.Exit(0)
 	}
 	switch os.Args[1] {
@@ -45,6 +47,22 @@ func main() {
 		}
 	case "prove-h5":
 		if err := runProveH5(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	case "conform", "conformance":
+		profile := conformance.ClaimProfile
+		if len(os.Args) > 2 {
+			profile = os.Args[2]
+			// allow short names
+			switch profile {
+			case "core", "hermes-core":
+				profile = "aesp.profile.hermes-core"
+			case "full", "hermes-agent-os":
+				profile = "aesp.profile.hermes-agent-os"
+			}
+		}
+		if err := runConform(profile); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -86,7 +104,23 @@ func runStatus() {
 	fmt.Println("endpoints: /api/v1/health /api/v1/missions /api/v1/events")
 	fmt.Println("           /api/v1/registry/* /api/v1/memory/search /api/v1/credentials")
 	fmt.Println("           /api/v1/security/posture /api/v1/policies")
-	fmt.Println("proof: hermesd prove-h4 | prove-h5")
+	fmt.Println("proof: hermesd prove-h4 | prove-h5 | conform")
+}
+
+func runConform(profile string) error {
+	printBanner()
+	rep, err := conformance.Run(context.Background(), conformance.Options{Profile: profile})
+	if err != nil {
+		return err
+	}
+	fmt.Print(conformance.Format(rep))
+	// Exit 0 only for claimed core profile green; full profile reports gaps intentionally
+	if profile == conformance.ClaimProfile || profile == "aesp.profile.hermes-core" {
+		if !rep.ClaimOK {
+			return fmt.Errorf("conformance claim failed")
+		}
+	}
+	return nil
 }
 
 func runProveH4() error {

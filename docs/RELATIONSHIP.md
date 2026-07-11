@@ -77,6 +77,8 @@ Hermes-specific product terms (Mission Control surfaces, Command Deck, Cherenkov
 
 ## Conformance
 
-- Protocol conformance: **AESP-RI** `conformance` remains the green bar for AESP.  
-- Product acceptance: Hermes gates (see `docs/gates/`) + AESP conformance still green when Hermes speaks AESP.  
+- Protocol suite guide: AESP `specification/CONFORMANCE.md`.  
+- **AESP-RI** `pkg/conformance` enumerates the reference implementation.  
+- **Hermes** claims product profile `aesp.profile.hermes-core` via `hermesd conform` / `make conform` (executable checks + gap catalog).  
+- Full `aesp.profile.hermes-agent-os` remains a **target** until catalog gaps close.  
 - Hermes must not ship “almost AESP” dialects without an ADR and upstream proposal.

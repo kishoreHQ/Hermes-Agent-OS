@@ -40,7 +40,8 @@
 - [x] Registry: providers / runtimes / tools from plugin registry  
 - [x] OpenAPI under `schemas/openapi-host-v1.yaml`  
 - [x] `hermesd serve`, `make smoke`  
-- [ ] Conformance harness that validates Hermes against full AESP Host expectations (H1.1)  
+- [x] **H1.1** AESP conformance: catalog + executable checks (`make conform`)  
+- [ ] Full `aesp.profile.hermes-agent-os` green (gaps filed; see catalog)  
 
 ### Phase H2 — Plugin runtime
 

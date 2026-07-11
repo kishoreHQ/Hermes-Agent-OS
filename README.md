@@ -58,10 +58,11 @@ make ui-dev         # :5173, proxies /api → kernel
 make ui-install && make ui-build
 make serve          # open http://127.0.0.1:8080
 
-# Smoke + proofs
+# Smoke + proofs + AESP conformance
 make smoke
 make prove-h4
 make prove-h5
+make conform          # aesp.profile.hermes-core
 ```
 
 ```bash
